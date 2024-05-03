@@ -1,0 +1,31 @@
+import pyodbc
+import tkinter as tk
+
+# Conectar ao banco de dados Access
+conn = pyodbc.connect(r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=Caminho_do_banco_de_dados.accdb;')
+
+# Consultar os dados
+cursor = conn.cursor()
+cursor.execute('SELECT * FROM Tabela')
+
+# Criar a interface gráfica
+root = tk.Tk()
+root.title("Interface de Edição de Dados")
+
+# Função para atualizar os dados no banco de dados
+def update_data():
+    # Implemente a lógica para atualizar os dados no banco Access aqui
+    pass
+
+# Exibir os dados na interface gráfica
+for row_idx, row in enumerate(cursor):
+    for col_idx, col in enumerate(row):
+        entry = tk.Entry(root)
+        entry.grid(row=row_idx, column=col_idx)
+        entry.insert(0, col)
+
+# Botão para atualizar os dados
+update_button = tk.Button(root, text="Atualizar Dados", command=update_data)
+update_button.grid(row=row_idx+1, columnspan=len(row))
+
+root.mainloop()
