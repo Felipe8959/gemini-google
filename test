@@ -1,64 +1,50 @@
-import tkinter as tk
+import pandas as pd
 import pyodbc
 
-class BancoDeDadosApp:
-    def __init__(self, janela):
-        self.janela = janela
-        self.janela.title("Aplicativo de Banco de Dados")
-        
-        # Conectar ao banco de dados Access
-        self.conexao = pyodbc.connect(r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=Caminho_para_o_banco_de_dados.accdb;')
-        self.cursor = self.conexao.cursor()
-        
-        # Criar a interface
-        self.frame = tk.Frame(self.janela)
-        self.frame.pack(padx=10, pady=10)
-        
-        self.lb_nome = tk.Label(self.frame, text="Nome:")
-        self.lb_nome.grid(row=0, column=0)
-        self.entry_nome = tk.Entry(self.frame)
-        self.entry_nome.grid(row=0, column=1)
-        
-        self.lb_idade = tk.Label(self.frame, text="Idade:")
-        self.lb_idade.grid(row=1, column=0)
-        self.entry_idade = tk.Entry(self.frame)
-        self.entry_idade.grid(row=1, column=1)
-        
-        self.btn_adicionar = tk.Button(self.frame, text="Adicionar", command=self.adicionar_dados)
-        self.btn_adicionar.grid(row=2, column=0, columnspan=2, pady=10)
-        
-        # Exibir os dados do banco de dados
-        self.exibir_dados()
+# Função para conectar ao banco Access
+def connect_to_access_database(access_file):
+    conn_str = (
+        r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};'
+        r'DBQ=' + access_file + ';'
+    )
+    conn = pyodbc.connect(conn_str)
+    return conn.cursor()
 
-    def adicionar_dados(self):
-        nome = self.entry_nome.get()
-        idade = self.entry_idade.get()
-        
-        # Adicionar os dados ao banco de dados
-        self.cursor.execute("INSERT INTO Tabela (Nome, Idade) VALUES (?, ?)", (nome, idade))
-        self.conexao.commit()
-        
-        # Limpar os campos após adicionar os dados
-        self.entry_nome.delete(0, tk.END)
-        self.entry_idade.delete(0, tk.END)
-        
-        # Atualizar a exibição dos dados
-        self.exibir_dados()
-        
-    def exibir_dados(self):
-        # Limpar qualquer exibição anterior
-        for widget in self.frame.winfo_children():
-            widget.destroy()
-        
-        # Consultar todos os registros do banco de dados
-        self.cursor.execute("SELECT * FROM Tabela")
-        registros = self.cursor.fetchall()
-        
-        # Exibir os registros em uma lista
-        for i, registro in enumerate(registros):
-            tk.Label(self.frame, text=f"Nome: {registro.Nome}, Idade: {registro.Idade}").grid(row=i+3, column=0, columnspan=2)
+# Função para verificar se uma linha já existe no banco de dados
+def row_exists_in_database(cursor, table_name, column_name, value):
+    query = f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = ?"
+    cursor.execute(query, value)
+    return cursor.fetchone()[0] > 0
 
-# Inicializar a janela
-janela = tk.Tk()
-app = BancoDeDadosApp(janela)
-janela.mainloop()
+# Função para inserir uma linha no banco de dados
+def insert_row_to_database(cursor, table_name, columns, values):
+    columns_str = ', '.join(columns)
+    placeholders = ', '.join(['?'] * len(columns))
+    query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
+    cursor.execute(query, values)
+
+# DataFrame existente
+data = {
+    'Nome': ['João', 'Maria', 'Pedro'],
+    'Idade': [30, 25, 35]
+}
+df = pd.DataFrame(data)
+
+# Conectar ao banco Access
+access_file = 'caminho_para_o_seu_banco_de_dados.accdb'
+cursor = connect_to_access_database(access_file)
+
+# Informações do banco de dados
+table_name = 'sua_tabela'
+id_column = 'id'  # Suponha que você tenha uma coluna ID única para cada registro no banco de dados
+
+# Iterar sobre as linhas do DataFrame e inserir no banco de dados se não existir
+for index, row in df.iterrows():
+    if not row_exists_in_database(cursor, table_name, 'Nome', row['Nome']):
+        insert_row_to_database(cursor, table_name, ['Nome', 'Idade'], [row['Nome'], row['Idade']])
+
+# Commit as alterações
+cursor.commit()
+
+# Fechar a conexão
+cursor.close()
