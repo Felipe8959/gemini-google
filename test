@@ -1,50 +1,45 @@
-import pandas as pd
-import pyodbc
+# Dicionários globais para armazenar os dados dos analistas
+dict_cpf_analista = {}
+dict_status_analista = {}
+analistas_protocolos = {}  # Armazena a contagem de protocolos por analista
 
-# Função para conectar ao banco Access
-def connect_to_access_database(access_file):
-    conn_str = (
-        r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};'
-        r'DBQ=' + access_file + ';'
-    )
-    conn = pyodbc.connect(conn_str)
-    return conn.cursor()
+def distribuir_analistas(row):
+    status = row['STATUS_VENCIMENTO']
+    cpf_cnpj = row['CPF/CNPJ']
+    revisao = row['REVISÃO']
+    prioridade = row['PRIORIDADE']
 
-# Função para verificar se uma linha já existe no banco de dados
-def row_exists_in_database(cursor, table_name, column_name, value):
-    query = f"SELECT COUNT(*) FROM {table_name} WHERE {column_name} = ?"
-    cursor.execute(query, value)
-    return cursor.fetchone()[0] > 0
+    # Inicializa a contagem de protocolos por analista se ainda não estiver no dicionário
+    for analista in dict_status_analista.get(status, []):
+        if analista not in analistas_protocolos:
+            analistas_protocolos[analista] = 0
 
-# Função para inserir uma linha no banco de dados
-def insert_row_to_database(cursor, table_name, columns, values):
-    columns_str = ', '.join(columns)
-    placeholders = ', '.join(['?'] * len(columns))
-    query = f"INSERT INTO {table_name} ({columns_str}) VALUES ({placeholders})"
-    cursor.execute(query, values)
+    # Se o CPF já foi atribuído a um analista, retorne ele
+    if cpf_cnpj in dict_cpf_analista:
+        return dict_cpf_analista[cpf_cnpj]
 
-# DataFrame existente
-data = {
-    'Nome': ['João', 'Maria', 'Pedro'],
-    'Idade': [30, 25, 35]
-}
-df = pd.DataFrame(data)
+    # Distribui igualmente para analistas se a revisão for "Sim"
+    if revisao == "Sim" and status in dict_status_analista:
+        analistas = dict_status_analista[status]
+        analista = analistas.pop(0)
+        analistas.append(analista)  # Coloca o analista no final da lista para a próxima vez
+        dict_cpf_analista[cpf_cnpj] = analista
+        analistas_protocolos[analista] += 1
+        return analista
 
-# Conectar ao banco Access
-access_file = 'caminho_para_o_seu_banco_de_dados.accdb'
-cursor = connect_to_access_database(access_file)
+    # Caso o número de protocolos distribuídos seja menor que 18, completar com prioridades menores
+    if status in dict_status_analista:
+        analistas = dict_status_analista[status]
+        analistas.sort(key=lambda a: analistas_protocolos[a])  # Ordena analistas pelo número de protocolos
+        for analista in analistas:
+            if analistas_protocolos[analista] < 18:
+                dict_cpf_analista[cpf_cnpj] = analista
+                analistas_protocolos[analista] += 1
+                return analista
 
-# Informações do banco de dados
-table_name = 'sua_tabela'
-id_column = 'id'  # Suponha que você tenha uma coluna ID única para cada registro no banco de dados
+    # Se não há analista disponível com menos de 18 protocolos, retorna None
+    return None
 
-# Iterar sobre as linhas do DataFrame e inserir no banco de dados se não existir
-for index, row in df.iterrows():
-    if not row_exists_in_database(cursor, table_name, 'Nome', row['Nome']):
-        insert_row_to_database(cursor, table_name, ['Nome', 'Idade'], [row['Nome'], row['Idade']])
-
-# Commit as alterações
-cursor.commit()
-
-# Fechar a conexão
-cursor.close()
+# Exemplo de uso:
+# row = {'STATUS_VENCIMENTO': '...', 'CPF/CNPJ': '...', 'REVISÃO': 'Sim', 'PRIORIDADE': '...'}
+# analista = distribuir_analistas(row)
