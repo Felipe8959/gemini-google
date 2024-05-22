@@ -1,22 +1,25 @@
-def distribuir_analistas(row, limite=18):
-    revisao = row['REVISÃO']
-    prioridade = row['PRIORIDADE']
+dict_status_analista = df_distribuicao.groupby('STATUS_VENCIMENTO')['ANALISTA'].apply(list).to_dict()
+dict_cpf_analista = {}
+dict_analista_distribuicoes = {}
 
-    if revisao == 'Sim':
-        analistas_disponiveis = list(dict_status_analista.values())
-        distribuicao = {analista: [] for analista in analistas_disponiveis}
-
-        for _ in range(limite):
-            menor_atribuicao = min(distribuicao, key=lambda x: len(distribuicao[x]))
-            distribuicao[menor_atribuicao].append(prioridade)
-
-        for analista, protocolos in distribuicao.items():
-            for protocolo in protocolos:
-                # atribuir protocolo ao analista aqui
-                pass  # Substitua este comentário com a lógica real de atribuição
-
-    else:
-        # Lógica para outro caso aqui
-        pass
-
-    return None  # ou algo mais significativo, dependendo do fluxo do seu programa
+def distribuir_analistas(row):
+    status = row['STATUS_VENCIMENTO']
+    cpf_cnpj = row['CPF/CNPJ']
+    
+    # Se CPF já foi atribuído a um analista, retorne ele
+    if cpf_cnpj in dict_cpf_analista:
+        return dict_cpf_analista[cpf_cnpj]
+    
+    # Se há analistas disponíveis para o status
+    if status in dict_status_analista:
+        # Distribui igualmente os analistas
+        analistas = dict_status_analista[status]
+        for analista in analistas:
+            if analista not in dict_analista_distribuicoes:
+                dict_analista_distribuicoes[analista] = 0
+            if dict_analista_distribuicoes[analista] < 18:
+                dict_analista_distribuicoes[analista] += 1
+                dict_cpf_analista[cpf_cnpj] = analista
+                return analista
+    
+    return None
