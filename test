@@ -32,6 +32,8 @@ def distribuir_analistas(row):
             dict_cpf_analista[cpf_cnpj] = analista
             analistas_protocolos[analista] += 1
             return analista
+        else:
+            return None  # Não há analista disponível com menos de 18 protocolos
 
     # Completar com menores prioridades se o número de protocolos for menor que 18
     analista = encontrar_analista()
@@ -46,3 +48,19 @@ def distribuir_analistas(row):
 # Exemplo de uso:
 # row = {'STATUS_VENCIMENTO': '...', 'CPF/CNPJ': '...', 'REVISÃO': 'Sim', 'PRIORIDADE': '...'}
 # analista = distribuir_analistas(row)
+
+# Exemplo de inicialização de dados
+dict_status_analista = {
+    'STATUS_1': ['HIGOR', 'PEDRO', 'JOSE', 'RAUL'],
+    # Adicione outros status e seus analistas correspondentes conforme necessário
+}
+
+# Teste
+rows = [
+    {'STATUS_VENCIMENTO': 'STATUS_1', 'CPF/CNPJ': '111', 'REVISÃO': 'Sim', 'PRIORIDADE': 1},
+    # Adicione outras linhas de teste conforme necessário
+]
+
+for row in rows:
+    analista = distribuir_analistas(row)
+    print(f"Protocolo {row['CPF/CNPJ']} atribuído a: {analista}")
