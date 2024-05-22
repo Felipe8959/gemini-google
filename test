@@ -22,4 +22,5 @@ def distribuir_analistas(row):
                 dict_cpf_analista[cpf_cnpj] = analista
                 return analista
     
+    # Se nenhum analista estiver disponível ou se excedeu o limite de distribuições
     return None
