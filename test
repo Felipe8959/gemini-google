@@ -1,10 +1,12 @@
+from collections import defaultdict
+
 def distribuir_analistas(row, limite=18):
     revisao = row['REVISÃO']
     prioridade = row['PRIORIDADE']
 
     if revisao == 'Sim':
         analistas_disponiveis = list(dict_status_analista.values())
-        distribuicao = {}
+        distribuicao = defaultdict(list)  # Usamos defaultdict em vez de um dicionário normal
 
         # Distribuir igualmente para os analistas
         for analista in analistas_disponiveis:
