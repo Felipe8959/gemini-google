@@ -1,69 +1,34 @@
-# Dicionários globais para armazenar os dados dos analistas
-dict_cpf_analista = {}
-dict_status_analista = {}
-analistas_protocolos = {}  # Armazena a contagem de protocolos por analista
+# Suponha que você tenha uma lista de protocolos representada como dicionários:
+# Cada dicionário representa um protocolo com chaves como 'ID', 'PRIORIDADE' e 'REVISÃO'.
 
-def distribuir_analistas(row):
-    status = row['STATUS_VENCIMENTO']
-    cpf_cnpj = row['CPF/CNPJ']
-    revisao = row['REVISÃO']
-    prioridade = row['PRIORIDADE']
-    
-    # Inicializa a contagem de protocolos por analista se ainda não estiver no dicionário
-    if 'DISTRIBUIÇÃO' not in row:
-        row['DISTRIBUIÇÃO'] = {}
-
-    for analista in dict_status_analista.get(status, []):
-        if analista not in row['DISTRIBUIÇÃO']:
-            row['DISTRIBUIÇÃO'][analista] = 0
-
-    # Se o CPF já foi atribuído a um analista, retorne ele
-    if cpf_cnpj in dict_cpf_analista:
-        return dict_cpf_analista[cpf_cnpj]
-
-    # Função auxiliar para encontrar um analista disponível com menos de 18 protocolos
-    def encontrar_analista():
-        for analista in dict_status_analista.get(status, []):
-            if row['DISTRIBUIÇÃO'][analista] < 18:
-                return analista
-        return None
-
-    # Distribui igualmente para analistas se a revisão for "Sim"
-    if revisao == "Sim" and status in dict_status_analista:
-        analista = encontrar_analista()
-        if analista:
-            dict_cpf_analista[cpf_cnpj] = analista
-            row['DISTRIBUIÇÃO'][analista] += 1
-            return analista
-        else:
-            return None  # Não há analista disponível com menos de 18 protocolos
-
-    # Completar com menores prioridades se o número de protocolos for menor que 18
-    analista = encontrar_analista()
-    if analista:
-        dict_cpf_analista[cpf_cnpj] = analista
-        row['DISTRIBUIÇÃO'][analista] += 1
-        return analista
-
-    # Se não há analista disponível com menos de 18 protocolos, retorna None
-    return None
-
-# Exemplo de inicialização de dados
-dict_status_analista = {
-    'STATUS_1': ['HIGOR', 'PEDRO', 'JOSE', 'RAUL'],
-    # Adicione outros status e seus analistas correspondentes conforme necessário
-}
-
-# Teste
-rows = [
-    {'STATUS_VENCIMENTO': 'STATUS_1', 'CPF/CNPJ': str(i), 'REVISÃO': 'Sim', 'PRIORIDADE': i} for i in range(1, 101)
+protocolos = [
+    {'ID': 1, 'PRIORIDADE': 3, 'REVISÃO': 'Sim'},
+    {'ID': 2, 'PRIORIDADE': 2, 'REVISÃO': 'Não'},
+    {'ID': 3, 'PRIORIDADE': 5, 'REVISÃO': 'Sim'},
+    # Adicione mais protocolos conforme necessário
 ]
 
-for row in rows:
-    analista = distribuir_analistas(row)
-    print(f"Protocolo {row['CPF/CNPJ']} atribuído a: {analista}")
+# Suponha que você tenha uma lista de analistas:
+analistas = ['Ana', 'João', 'Maria']  # Adicione mais analistas conforme necessário
 
-# Verificação final
-for analista in dict_status_analista['STATUS_1']:
-    count = sum(row['DISTRIBUIÇÃO'][analista] for row in rows if 'DISTRIBUIÇÃO' in row)
-    print(f"{analista} tem {count} protocolos.")
+# Função para distribuir protocolos entre os analistas
+def distribuir_protocolos(protocolos, analistas, limite_por_analista=18):
+    # Filtrar os protocolos que precisam de revisão
+    protocolos_para_revisao = [p for p in protocolos if p['REVISÃO'] == 'Sim']
+    
+    # Ordenar os protocolos por prioridade
+    protocolos_para_revisao.sort(key=lambda x: x['PRIORIDADE'])
+    
+    # Distribuir igualmente entre os analistas
+    num_analistas = len(analistas)
+    num_protocolos_para_distribuir = min(len(protocolos_para_revisao), limite_por_analista * num_analistas)
+    protocolos_distribuidos_por_analista = num_protocolos_para_distribuir // num_analistas
+    
+    for i, analista in enumerate(analistas):
+        inicio = i * protocolos_distribuidos_por_analista
+        fim = inicio + protocolos_distribuidos_por_analista
+        protocolos_do_analista = protocolos_para_revisao[inicio:fim]
+        print(f"Protocolos para {analista}: {protocolos_do_analista}")
+
+# Chamada da função para distribuir os protocolos
+distribuir_protocolos(protocolos, analistas)
