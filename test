@@ -8,11 +8,14 @@ def distribuir_analistas(row):
     cpf_cnpj = row['CPF/CNPJ']
     revisao = row['REVISÃO']
     prioridade = row['PRIORIDADE']
-
+    
     # Inicializa a contagem de protocolos por analista se ainda não estiver no dicionário
+    if 'DISTRIBUIÇÃO' not in row:
+        row['DISTRIBUIÇÃO'] = {}
+
     for analista in dict_status_analista.get(status, []):
-        if analista not in analistas_protocolos:
-            analistas_protocolos[analista] = 0
+        if analista not in row['DISTRIBUIÇÃO']:
+            row['DISTRIBUIÇÃO'][analista] = 0
 
     # Se o CPF já foi atribuído a um analista, retorne ele
     if cpf_cnpj in dict_cpf_analista:
@@ -21,7 +24,7 @@ def distribuir_analistas(row):
     # Função auxiliar para encontrar um analista disponível com menos de 18 protocolos
     def encontrar_analista():
         for analista in dict_status_analista.get(status, []):
-            if analistas_protocolos[analista] < 18:
+            if row['DISTRIBUIÇÃO'][analista] < 18:
                 return analista
         return None
 
@@ -30,7 +33,7 @@ def distribuir_analistas(row):
         analista = encontrar_analista()
         if analista:
             dict_cpf_analista[cpf_cnpj] = analista
-            analistas_protocolos[analista] += 1
+            row['DISTRIBUIÇÃO'][analista] += 1
             return analista
         else:
             return None  # Não há analista disponível com menos de 18 protocolos
@@ -39,15 +42,11 @@ def distribuir_analistas(row):
     analista = encontrar_analista()
     if analista:
         dict_cpf_analista[cpf_cnpj] = analista
-        analistas_protocolos[analista] += 1
+        row['DISTRIBUIÇÃO'][analista] += 1
         return analista
 
     # Se não há analista disponível com menos de 18 protocolos, retorna None
     return None
-
-# Exemplo de uso:
-# row = {'STATUS_VENCIMENTO': '...', 'CPF/CNPJ': '...', 'REVISÃO': 'Sim', 'PRIORIDADE': '...'}
-# analista = distribuir_analistas(row)
 
 # Exemplo de inicialização de dados
 dict_status_analista = {
@@ -57,10 +56,14 @@ dict_status_analista = {
 
 # Teste
 rows = [
-    {'STATUS_VENCIMENTO': 'STATUS_1', 'CPF/CNPJ': '111', 'REVISÃO': 'Sim', 'PRIORIDADE': 1},
-    # Adicione outras linhas de teste conforme necessário
+    {'STATUS_VENCIMENTO': 'STATUS_1', 'CPF/CNPJ': str(i), 'REVISÃO': 'Sim', 'PRIORIDADE': i} for i in range(1, 101)
 ]
 
 for row in rows:
     analista = distribuir_analistas(row)
     print(f"Protocolo {row['CPF/CNPJ']} atribuído a: {analista}")
+
+# Verificação final
+for analista in dict_status_analista['STATUS_1']:
+    count = sum(row['DISTRIBUIÇÃO'][analista] for row in rows if 'DISTRIBUIÇÃO' in row)
+    print(f"{analista} tem {count} protocolos.")
