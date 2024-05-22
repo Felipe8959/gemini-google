@@ -1,45 +1,44 @@
-# Dicionários globais para armazenar os dados dos analistas
 dict_cpf_analista = {}
 dict_status_analista = {}
-analistas_protocolos = {}  # Armazena a contagem de protocolos por analista
+analistas_protocolos = {}
 
 def distribuir_analistas(row):
     status = row['STATUS_VENCIMENTO']
     cpf_cnpj = row['CPF/CNPJ']
     revisao = row['REVISÃO']
     prioridade = row['PRIORIDADE']
+    
+    print(f"Processing row: {row}")  # Adiciona esta linha para depuração
 
-    # Inicializa a contagem de protocolos por analista se ainda não estiver no dicionário
     for analista in dict_status_analista.get(status, []):
         if analista not in analistas_protocolos:
             analistas_protocolos[analista] = 0
 
-    # Se o CPF já foi atribuído a um analista, retorne ele
     if cpf_cnpj in dict_cpf_analista:
+        print(f"CPF already assigned: {cpf_cnpj}, Analyst: {dict_cpf_analista[cpf_cnpj]}")  # Depuração
         return dict_cpf_analista[cpf_cnpj]
 
-    # Distribui igualmente para analistas se a revisão for "Sim"
     if revisao == "Sim" and status in dict_status_analista:
         analistas = dict_status_analista[status]
         analista = analistas.pop(0)
-        analistas.append(analista)  # Coloca o analista no final da lista para a próxima vez
+        analistas.append(analista)
         dict_cpf_analista[cpf_cnpj] = analista
         analistas_protocolos[analista] += 1
+        print(f"Assigned analyst {analista} to CPF {cpf_cnpj} with status {status}")  # Depuração
         return analista
 
-    # Caso o número de protocolos distribuídos seja menor que 18, completar com prioridades menores
     if status in dict_status_analista:
         analistas = dict_status_analista[status]
-        analistas.sort(key=lambda a: analistas_protocolos[a])  # Ordena analistas pelo número de protocolos
+        analistas.sort(key=lambda a: analistas_protocolos[a])
         for analista in analistas:
             if analistas_protocolos[analista] < 18:
                 dict_cpf_analista[cpf_cnpj] = analista
                 analistas_protocolos[analista] += 1
+                print(f"Assigned analyst {analista} to CPF {cpf_cnpj} (less than 18 protocols)")  # Depuração
                 return analista
 
-    # Se não há analista disponível com menos de 18 protocolos, retorna None
+    print(f"No analyst available for CPF {cpf_cnpj} with status {status}")  # Depuração
     return None
 
-# Exemplo de uso:
-# row = {'STATUS_VENCIMENTO': '...', 'CPF/CNPJ': '...', 'REVISÃO': 'Sim', 'PRIORIDADE': '...'}
-# analista = distribuir_analistas(row)
+# Teste a função no DataFrame
+df_base_cruzamento2['DISTRIBUIÇÃO'] = df_base_cruzamento2.apply(distribuir_analistas, axis=1)
