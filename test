@@ -1,34 +1,28 @@
-# Suponha que você tenha uma lista de protocolos representada como dicionários:
-# Cada dicionário representa um protocolo com chaves como 'ID', 'PRIORIDADE' e 'REVISÃO'.
+def distribuir_analistas(row, limite=18):
+    revisao = row['REVISÃO']
+    prioridade = row['PRIORIDADE']
 
-protocolos = [
-    {'ID': 1, 'PRIORIDADE': 3, 'REVISÃO': 'Sim'},
-    {'ID': 2, 'PRIORIDADE': 2, 'REVISÃO': 'Não'},
-    {'ID': 3, 'PRIORIDADE': 5, 'REVISÃO': 'Sim'},
-    # Adicione mais protocolos conforme necessário
-]
+    if revisao == 'Sim':
+        analistas_disponiveis = list(dict_status_analista.values())
+        distribuicao = {}
 
-# Suponha que você tenha uma lista de analistas:
-analistas = ['Ana', 'João', 'Maria']  # Adicione mais analistas conforme necessário
+        # Distribuir igualmente para os analistas
+        for analista in analistas_disponiveis:
+            distribuicao[analista] = []
 
-# Função para distribuir protocolos entre os analistas
-def distribuir_protocolos(protocolos, analistas, limite_por_analista=18):
-    # Filtrar os protocolos que precisam de revisão
-    protocolos_para_revisao = [p for p in protocolos if p['REVISÃO'] == 'Sim']
-    
-    # Ordenar os protocolos por prioridade
-    protocolos_para_revisao.sort(key=lambda x: x['PRIORIDADE'])
-    
-    # Distribuir igualmente entre os analistas
-    num_analistas = len(analistas)
-    num_protocolos_para_distribuir = min(len(protocolos_para_revisao), limite_por_analista * num_analistas)
-    protocolos_distribuidos_por_analista = num_protocolos_para_distribuir // num_analistas
-    
-    for i, analista in enumerate(analistas):
-        inicio = i * protocolos_distribuidos_por_analista
-        fim = inicio + protocolos_distribuidos_por_analista
-        protocolos_do_analista = protocolos_para_revisao[inicio:fim]
-        print(f"Protocolos para {analista}: {protocolos_do_analista}")
+        for _ in range(limite):
+            # Encontrar o analista com menos atribuições
+            menor_atribuicao = min(distribuicao, key=lambda x: len(distribuicao[x]))
+            distribuicao[menor_atribuicao].append(prioridade)
 
-# Chamada da função para distribuir os protocolos
-distribuir_protocolos(protocolos, analistas)
+        # Atribuir protocolos ao analista
+        for analista, protocolos in distribuicao.items():
+            for protocolo in protocolos:
+                # atribuir protocolo ao analista aqui
+                pass  # Substitua este comentário com a lógica real de atribuição
+
+    else:
+        # Lógica para outro caso aqui
+        pass
+
+    return None  # ou algo mais significativo, dependendo do fluxo do seu programa
