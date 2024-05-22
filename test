@@ -1,23 +1,15 @@
-from collections import defaultdict
-
 def distribuir_analistas(row, limite=18):
     revisao = row['REVISÃO']
     prioridade = row['PRIORIDADE']
 
     if revisao == 'Sim':
         analistas_disponiveis = list(dict_status_analista.values())
-        distribuicao = defaultdict(list)  # Usamos defaultdict em vez de um dicionário normal
-
-        # Distribuir igualmente para os analistas
-        for analista in analistas_disponiveis:
-            distribuicao[analista] = []
+        distribuicao = {analista: [] for analista in analistas_disponiveis}
 
         for _ in range(limite):
-            # Encontrar o analista com menos atribuições
             menor_atribuicao = min(distribuicao, key=lambda x: len(distribuicao[x]))
             distribuicao[menor_atribuicao].append(prioridade)
 
-        # Atribuir protocolos ao analista
         for analista, protocolos in distribuicao.items():
             for protocolo in protocolos:
                 # atribuir protocolo ao analista aqui
