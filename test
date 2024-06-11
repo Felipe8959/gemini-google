@@ -1,26 +1,39 @@
-dict_status_analista = df_distribuicao.groupby('STATUS_VENCIMENTO')['ANALISTA'].apply(list).to_dict()
-dict_cpf_analista = {}
-dict_analista_distribuicoes = {}
+import tkinter as tk
+from tkinter import ttk
 
-def distribuir_analistas(row):
-    status = row['STATUS_VENCIMENTO']
-    cpf_cnpj = row['CPF/CNPJ']
-    
-    # Se CPF já foi atribuído a um analista, retorne ele
-    if cpf_cnpj in dict_cpf_analista:
-        return dict_cpf_analista[cpf_cnpj]
-    
-    # Se há analistas disponíveis para o status
-    if status in dict_status_analista:
-        # Distribui igualmente os analistas
-        analistas = dict_status_analista[status]
-        for analista in analistas:
-            if analista not in dict_analista_distribuicoes:
-                dict_analista_distribuicoes[analista] = 0
-            if dict_analista_distribuicoes[analista] < 18:
-                dict_analista_distribuicoes[analista] += 1
-                dict_cpf_analista[cpf_cnpj] = analista
-                return analista
-    
-    # Se nenhum analista estiver disponível ou se excedeu o limite de distribuições
-    return None
+def adjust_treeview_columns(treeview):
+    # Redimensiona as colunas da Treeview para que ocupem todo o espaço disponível
+    for col in treeview['columns']:
+        treeview.column(col, width=int(treeview.winfo_width() / len(treeview['columns'])))
+
+# Função para ajustar o tamanho das colunas quando a janela é redimensionada
+def on_resize(event):
+    adjust_treeview_columns(treeview)
+
+root = tk.Tk()
+root.title("Treeview Responsiva")
+
+# Configurar a janela para redimensionar dinamicamente
+root.grid_rowconfigure(0, weight=1)
+root.grid_columnconfigure(0, weight=1)
+
+# Adicionar Treeview
+treeview = ttk.Treeview(root, columns=("col1", "col2", "col3"), show='headings')
+treeview.heading("col1", text="Coluna 1")
+treeview.heading("col2", text="Coluna 2")
+treeview.heading("col3", text="Coluna 3")
+
+treeview.grid(row=0, column=0, sticky='nsew')
+
+# Adicionar algum conteúdo para visualizar
+for i in range(20):
+    treeview.insert("", "end", values=(f"Item {i+1}", f"Valor {i+1}", f"Descrição {i+1}"))
+
+# Vincular o evento de redimensionamento
+root.bind('<Configure>', on_resize)
+
+# Inicializar as colunas com o tamanho adequado
+root.update_idletasks()
+adjust_treeview_columns(treeview)
+
+root.mainloop()
