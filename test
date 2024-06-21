@@ -1,39 +1,40 @@
-import tkinter as tk
-from tkinter import ttk
+import pyodbc
+import pandas as pd
 
-def adjust_treeview_columns(treeview):
-    # Redimensiona as colunas da Treeview para que ocupem todo o espaço disponível
-    for col in treeview['columns']:
-        treeview.column(col, width=int(treeview.winfo_width() / len(treeview['columns'])))
+def extrair_excel():
+    try:
+        # Conecte-se ao banco de dados Access
+        conn_str = (
+            r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
+            r"DBQ=d4966s003\d4966_1\Secoes\S010\COMUM_S010\AUTOMATIZACOES\RA E CG\REGISTRO_CONSUMIDOR.GOV\Base_Registros_CG.accdb;"
+        )
+        cnxn = pyodbc.connect(conn_str)
+        
+        query_analistas = (
+            "SELECT * FROM Registro WHERE ANALISTA_REGISTRO = '{nome_analista}' "
+            "OR ANALISTA_RESPOSTA = '{nome_analista}'"
+        )
+        analistas = pd.read_sql(query_analistas, cnxn)
+        
+        caminho = f"C:/Users/{usuario_estacao}/Desktop/extraidos.xlsx"
+        analistas.to_excel(caminho, index=False)
+        
+    except pyodbc.Error as e:
+        print(f"Erro ao conectar ao banco de dados: {e}")
+    except pd.io.sql.DatabaseError as e:
+        print(f"Erro ao executar a consulta SQL: {e}")
+    except FileNotFoundError as e:
+        print(f"Caminho do arquivo não encontrado: {e}")
+    except PermissionError as e:
+        print(f"Permissão negada ao salvar o arquivo: {e}")
+    except Exception as e:
+        print(f"Ocorreu um erro inesperado: {e}")
+    finally:
+        try:
+            cnxn.close()
+        except:
+            pass
 
-# Função para ajustar o tamanho das colunas quando a janela é redimensionada
-def on_resize(event):
-    adjust_treeview_columns(treeview)
-
-root = tk.Tk()
-root.title("Treeview Responsiva")
-
-# Configurar a janela para redimensionar dinamicamente
-root.grid_rowconfigure(0, weight=1)
-root.grid_columnconfigure(0, weight=1)
-
-# Adicionar Treeview
-treeview = ttk.Treeview(root, columns=("col1", "col2", "col3"), show='headings')
-treeview.heading("col1", text="Coluna 1")
-treeview.heading("col2", text="Coluna 2")
-treeview.heading("col3", text="Coluna 3")
-
-treeview.grid(row=0, column=0, sticky='nsew')
-
-# Adicionar algum conteúdo para visualizar
-for i in range(20):
-    treeview.insert("", "end", values=(f"Item {i+1}", f"Valor {i+1}", f"Descrição {i+1}"))
-
-# Vincular o evento de redimensionamento
-root.bind('<Configure>', on_resize)
-
-# Inicializar as colunas com o tamanho adequado
-root.update_idletasks()
-adjust_treeview_columns(treeview)
-
-root.mainloop()
+def visualizar_tudo():
+    # Implementação da função visualizer_tudo
+    pass
