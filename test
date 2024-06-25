@@ -1,40 +1,28 @@
-import pyodbc
-import pandas as pd
+import customtkinter as ctk
+import tkinter as tk
+from tkinter import ttk
 
-def extrair_excel():
-    try:
-        # Conecte-se ao banco de dados Access
-        conn_str = (
-            r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
-            r"DBQ=d4966s003\d4966_1\Secoes\S010\COMUM_S010\AUTOMATIZACOES\RA E CG\REGISTRO_CONSUMIDOR.GOV\Base_Registros_CG.accdb;"
-        )
-        cnxn = pyodbc.connect(conn_str)
-        
-        query_analistas = (
-            "SELECT * FROM Registro WHERE ANALISTA_REGISTRO = '{nome_analista}' "
-            "OR ANALISTA_RESPOSTA = '{nome_analista}'"
-        )
-        analistas = pd.read_sql(query_analistas, cnxn)
-        
-        caminho = f"C:/Users/{usuario_estacao}/Desktop/extraidos.xlsx"
-        analistas.to_excel(caminho, index=False)
-        
-    except pyodbc.Error as e:
-        print(f"Erro ao conectar ao banco de dados: {e}")
-    except pd.io.sql.DatabaseError as e:
-        print(f"Erro ao executar a consulta SQL: {e}")
-    except FileNotFoundError as e:
-        print(f"Caminho do arquivo não encontrado: {e}")
-    except PermissionError as e:
-        print(f"Permissão negada ao salvar o arquivo: {e}")
-    except Exception as e:
-        print(f"Ocorreu um erro inesperado: {e}")
-    finally:
-        try:
-            cnxn.close()
-        except:
-            pass
+def on_double_click(event):
+    # Obter o item clicado
+    item = treeview.identify('item', event.x, event.y)
+    if item:
+        print(f"Item duplo clicado: {treeview.item(item, 'text')}")
 
-def visualizar_tudo():
-    # Implementação da função visualizer_tudo
-    pass
+# Configuração da janela principal
+root = ctk.CTk()
+root.geometry("400x300")
+
+# Configuração da Treeview
+treeview = ttk.Treeview(root)
+treeview.pack(fill=tk.BOTH, expand=True)
+
+# Adicionando alguns itens à Treeview para exemplo
+treeview.insert("", "end", text="Item 1")
+treeview.insert("", "end", text="Item 2")
+treeview.insert("", "end", text="Item 3")
+
+# Vinculando o evento double click à função on_double_click
+treeview.bind("<Double-1>", on_double_click)
+
+# Executando o loop principal da aplicação
+root.mainloop()
