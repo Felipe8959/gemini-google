@@ -2,8 +2,21 @@ import customtkinter as ctk
 import tkinter as tk
 from tkinter import ttk
 
+def sort_treeview_column(treeview, col, reverse):
+    # Obter todos os itens da Treeview
+    items = [(treeview.set(k, col), k) for k in treeview.get_children('')]
+    
+    # Ordenar os itens
+    items.sort(reverse=reverse)
+    
+    # Reordenar os itens na Treeview
+    for index, (val, k) in enumerate(items):
+        treeview.move(k, '', index)
+    
+    # Alternar a direção da ordenação
+    treeview.heading(col, command=lambda: sort_treeview_column(treeview, col, not reverse))
+
 def on_double_click(event):
-    # Obter o item clicado
     item = treeview.identify('item', event.x, event.y)
     if item:
         print(f"Item duplo clicado: {treeview.item(item, 'text')}")
@@ -12,14 +25,24 @@ def on_double_click(event):
 root = ctk.CTk()
 root.geometry("400x300")
 
-# Configuração da Treeview
-treeview = ttk.Treeview(root)
+# Configuração da Treeview com colunas
+treeview = ttk.Treeview(root, columns=("col1", "col2", "col3"), show="headings")
 treeview.pack(fill=tk.BOTH, expand=True)
 
+# Configurando os títulos das colunas
+treeview.heading("col1", text="Coluna 1", command=lambda: sort_treeview_column(treeview, "col1", False))
+treeview.heading("col2", text="Coluna 2", command=lambda: sort_treeview_column(treeview, "col2", False))
+treeview.heading("col3", text="Coluna 3", command=lambda: sort_treeview_column(treeview, "col3", False))
+
+# Configurando o tamanho das colunas
+treeview.column("col1", width=100)
+treeview.column("col2", width=100)
+treeview.column("col3", width=100)
+
 # Adicionando alguns itens à Treeview para exemplo
-treeview.insert("", "end", text="Item 1")
-treeview.insert("", "end", text="Item 2")
-treeview.insert("", "end", text="Item 3")
+treeview.insert("", "end", values=("A1", "B1", "C1"))
+treeview.insert("", "end", values=("A3", "B3", "C3"))
+treeview.insert("", "end", values=("A2", "B2", "C2"))
 
 # Vinculando o evento double click à função on_double_click
 treeview.bind("<Double-1>", on_double_click)
