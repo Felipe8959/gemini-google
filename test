@@ -1,33 +1,37 @@
 import pandas as pd
-from openpyxl import load_workbook
-from openpyxl.styles import PatternFill
+import xlsxwriter
 from datetime import datetime
 
-# Exemplo de DataFrame
-data = {'PRAZO': ['2024-07-01', '2024-06-25', '2024-08-15']}
+# Suponha que você tenha um DataFrame 'df' com uma coluna 'PRAZO'
+data = {'PRAZO': ['2024-07-01', '2024-06-20', '2024-06-30']}
 df = pd.DataFrame(data)
+
+# Convertendo a coluna 'PRAZO' para datetime
 df['PRAZO'] = pd.to_datetime(df['PRAZO'])
 
-# Salva o DataFrame em um arquivo Excel sem formatação
-file_name = 'dataframe.xlsx'
-df.to_excel(file_name, index=False)
+# Criando um arquivo Excel
+filename = 'prazo.xlsx'
+writer = pd.ExcelWriter(filename, engine='xlsxwriter')
+df.to_excel(writer, index=False, sheet_name='Sheet1')
 
-# Carrega o arquivo Excel para aplicar formatação condicional
-wb = load_workbook(file_name)
-ws = wb.active
+# Obtendo o workbook e o worksheet
+workbook  = writer.book
+worksheet = writer.sheets['Sheet1']
 
-# Define a cor de preenchimento (amarelo)
-yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+# Formatando as datas
+date_format = workbook.add_format({'num_format': 'yyyy-mm-dd'})
 
-# Obtenha a data de hoje
-today = datetime.today()
+# Aplicando a formatação condicional
+yellow_format = workbook.add_format({'bg_color': 'yellow'})
 
-# Itera sobre as células na coluna 'PRAZO' (assumindo que está na coluna B)
-for row in range(2, ws.max_row + 1):  # Começa na linha 2 para pular o cabeçalho
-    cell = ws[f'B{row}']
-    cell_date = pd.to_datetime(cell.value)
-    if cell_date > today:
-        cell.fill = yellow_fill
+# Obtendo a data atual
+current_date = datetime.now().strftime('%Y-%m-%d')
 
-# Salva as mudanças no arquivo Excel
-wb.save(file_name)
+# Adicionando a formatação condicional
+worksheet.conditional_format('A2:A{}'.format(len(df)+1), 
+                             {'type': 'formula',
+                              'criteria': '=$A2>TODAY()',
+                              'format': yellow_format})
+
+# Salvando o arquivo
+writer.save()
