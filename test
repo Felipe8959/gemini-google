@@ -1,37 +1,38 @@
+import pyodbc
 import pandas as pd
-import xlsxwriter
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 from datetime import datetime
 
-# Suponha que você tenha um DataFrame 'df' com uma coluna 'PRAZO'
-data = {'PRAZO': ['2024-07-01', '2024-06-20', '2024-06-30']}
-df = pd.DataFrame(data)
+def relatorio_prazo():
+    # Conecte-se ao banco de dados Access
+    conn_str = r'DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};DBQ=\\d4960s003\d4968_1\Secoes\D49605010\Comum_S010\AUTOMATIZAÇÕES\RA E CG\REGISTRO_CONSUMIDOR.GOV\Base_Registros_CG.accdb;'
+    cnxn = pyodbc.connect(conn_str)
+    
+    # Query para obter os dados
+    query_analistas = "SELECT NUMERO_EXTERNO, PROTOCOLO, CONSUMIDOR, CPF, PRAZO_CG, ANALISTA_REGISTRO FROM Registro"
+    analistas = pd.read_sql(query_analistas, cnxn)
+    
+    # Salvar dados em um arquivo Excel
+    nome_arquivo = 'TESTE_FORMAT_PRAZO.xlsx'
+    analistas.to_excel(nome_arquivo, index=False)
+    
+    # Abrir o arquivo Excel para edição
+    wb = load_workbook(nome_arquivo)
+    ws = wb.active
+    
+    # Definir estilo de preenchimento amarelo
+    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    
+    # Iterar sobre as linhas e aplicar a formatação condicional
+    for row in ws.iter_rows(min_row=2, min_col=5, max_col=5):  # Começa na linha 2 para ignorar o cabeçalho
+        for cell in row:
+            prazo_date = datetime.strptime(cell.value, '%Y-%m-%d')  # Ajuste o formato de data conforme necessário
+            if prazo_date > datetime.now():
+                cell.fill = yellow_fill
+    
+    # Salvar o arquivo modificado
+    wb.save(nome_arquivo)
 
-# Convertendo a coluna 'PRAZO' para datetime
-df['PRAZO'] = pd.to_datetime(df['PRAZO'])
-
-# Criando um arquivo Excel
-filename = 'prazo.xlsx'
-writer = pd.ExcelWriter(filename, engine='xlsxwriter')
-df.to_excel(writer, index=False, sheet_name='Sheet1')
-
-# Obtendo o workbook e o worksheet
-workbook  = writer.book
-worksheet = writer.sheets['Sheet1']
-
-# Formatando as datas
-date_format = workbook.add_format({'num_format': 'yyyy-mm-dd'})
-
-# Aplicando a formatação condicional
-yellow_format = workbook.add_format({'bg_color': 'yellow'})
-
-# Obtendo a data atual
-current_date = datetime.now().strftime('%Y-%m-%d')
-
-# Adicionando a formatação condicional
-worksheet.conditional_format('A2:A{}'.format(len(df)+1), 
-                             {'type': 'formula',
-                              'criteria': '=$A2>TODAY()',
-                              'format': yellow_format})
-
-# Salvando o arquivo
-writer.save()
+# Chamar a função
+relatorio_prazo()
