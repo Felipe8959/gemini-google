@@ -1,51 +1,33 @@
-import customtkinter as ctk
-import tkinter as tk
-from tkinter import ttk
+import pandas as pd
+from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
+from datetime import datetime
 
-def sort_treeview_column(treeview, col, reverse):
-    # Obter todos os itens da Treeview
-    items = [(treeview.set(k, col), k) for k in treeview.get_children('')]
-    
-    # Ordenar os itens
-    items.sort(reverse=reverse)
-    
-    # Reordenar os itens na Treeview
-    for index, (val, k) in enumerate(items):
-        treeview.move(k, '', index)
-    
-    # Alternar a direção da ordenação
-    treeview.heading(col, command=lambda: sort_treeview_column(treeview, col, not reverse))
+# Exemplo de DataFrame
+data = {'PRAZO': ['2024-07-01', '2024-06-25', '2024-08-15']}
+df = pd.DataFrame(data)
+df['PRAZO'] = pd.to_datetime(df['PRAZO'])
 
-def on_double_click(event):
-    item = treeview.identify('item', event.x, event.y)
-    if item:
-        print(f"Item duplo clicado: {treeview.item(item, 'text')}")
+# Salva o DataFrame em um arquivo Excel sem formatação
+file_name = 'dataframe.xlsx'
+df.to_excel(file_name, index=False)
 
-# Configuração da janela principal
-root = ctk.CTk()
-root.geometry("400x300")
+# Carrega o arquivo Excel para aplicar formatação condicional
+wb = load_workbook(file_name)
+ws = wb.active
 
-# Configuração da Treeview com colunas
-treeview = ttk.Treeview(root, columns=("col1", "col2", "col3"), show="headings")
-treeview.pack(fill=tk.BOTH, expand=True)
+# Define a cor de preenchimento (amarelo)
+yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 
-# Configurando os títulos das colunas
-treeview.heading("col1", text="Coluna 1", command=lambda: sort_treeview_column(treeview, "col1", False))
-treeview.heading("col2", text="Coluna 2", command=lambda: sort_treeview_column(treeview, "col2", False))
-treeview.heading("col3", text="Coluna 3", command=lambda: sort_treeview_column(treeview, "col3", False))
+# Obtenha a data de hoje
+today = datetime.today()
 
-# Configurando o tamanho das colunas
-treeview.column("col1", width=100)
-treeview.column("col2", width=100)
-treeview.column("col3", width=100)
+# Itera sobre as células na coluna 'PRAZO' (assumindo que está na coluna B)
+for row in range(2, ws.max_row + 1):  # Começa na linha 2 para pular o cabeçalho
+    cell = ws[f'B{row}']
+    cell_date = pd.to_datetime(cell.value)
+    if cell_date > today:
+        cell.fill = yellow_fill
 
-# Adicionando alguns itens à Treeview para exemplo
-treeview.insert("", "end", values=("A1", "B1", "C1"))
-treeview.insert("", "end", values=("A3", "B3", "C3"))
-treeview.insert("", "end", values=("A2", "B2", "C2"))
-
-# Vinculando o evento double click à função on_double_click
-treeview.bind("<Double-1>", on_double_click)
-
-# Executando o loop principal da aplicação
-root.mainloop()
+# Salva as mudanças no arquivo Excel
+wb.save(file_name)
