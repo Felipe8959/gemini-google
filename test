@@ -1,8 +1,9 @@
 import pyodbc
 import pandas as pd
 from openpyxl import load_workbook
-from openpyxl.styles import PatternFill
-from datetime import datetime
+from openpyxl.styles import PatternFill, Font, Alignment
+from openpyxl.utils import get_column_letter
+from datetime import datetime, timedelta
 
 def relatorio_prazo():
     # Conecte-se ao banco de dados Access
@@ -21,15 +22,40 @@ def relatorio_prazo():
     wb = load_workbook(nome_arquivo)
     ws = wb.active
     
-    # Definir estilo de preenchimento amarelo
+    # Definir estilos
     yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    header_fill = PatternFill(start_color="FFCC00", end_color="FFCC00", fill_type="solid")
+    font_style = Font(name='Arial', size=10, bold=True)
+    alignment = Alignment(horizontal='center', vertical='center')
     
-    # Iterar sobre as linhas e aplicar a formatação condicional
+    # Calcular a data de três dias atrás
+    three_days_ago = datetime.now() - timedelta(days=3)
+    
+    # Aplicar formatação condicional
     for row in ws.iter_rows(min_row=2, min_col=5, max_col=5):  # Começa na linha 2 para ignorar o cabeçalho
         for cell in row:
-            prazo_date = datetime.strptime(cell.value, '%Y-%m-%d')  # Ajuste o formato de data conforme necessário
-            if prazo_date > datetime.now():
+            prazo_date = cell.value
+            if isinstance(prazo_date, datetime) and prazo_date > three_days_ago:
                 cell.fill = yellow_fill
+    
+    # Formatar cabeçalho
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = font_style
+        cell.alignment = alignment
+    
+    # Ajustar largura das colunas
+    for col in ws.columns:
+        max_length = 0
+        column = col[0].column_letter  # Obter a letra da coluna
+        for cell in col:
+            try:
+                if len(str(cell.value)) > max_length:
+                    max_length = len(str(cell.value))
+            except:
+                pass
+        adjusted_width = max_length + 2
+        ws.column_dimensions[column].width = adjusted_width
     
     # Salvar o arquivo modificado
     wb.save(nome_arquivo)
