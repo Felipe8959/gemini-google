@@ -1,33 +1,17 @@
-from openpyxl import load_workbook
-from openpyxl.styles import PatternFill
-from datetime import datetime, timedelta
-
-# Carregar a planilha
-wb = load_workbook('sua_planilha.xlsx')
-ws = wb.active
-
-# Definir preenchimentos de cor
-fill_amarelo = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-fill_laranja = PatternFill(start_color="FFA500", end_color="FFA500", fill_type="solid")
-
-# Obter a data atual
-data_atual = datetime.now()
-
-# Percorrer as linhas, começando da segunda para ignorar o cabeçalho
-for row in ws.iter_rows(min_row=2, min_col=col_ref, max_col=col_ref):
-    for cell in row:
-        if isinstance(cell.value, datetime):
-            prazo_date = cell.value
-            prazo_amarelo = data_atual - timedelta(days=3)
-            prazo_laranja = data_atual
-
-            if prazo_date <= prazo_laranja:
-                cell.fill = fill_laranja
-            elif prazo_date < prazo_amarelo:
-                cell.fill = fill_amarelo
-
-            # Formatar a data
-            cell.number_format = 'DD/MM/YYYY'
-
-# Salvar a planilha
-wb.save('sua_planilha_formatada.xlsx')
+Private Sub Application_ItemSend(ByVal Item As Object, Cancel As Boolean)
+    Dim olMail As Outlook.MailItem
+    Dim Prompt As String
+    Dim AnexoFaltando As Boolean
+    
+    If TypeName(Item) = "MailItem" Then
+        Set olMail = Item
+        AnexoFaltando = (olMail.Attachments.Count = 0) And (InStr(olMail.Body, "anexo") > 0 Or InStr(olMail.Body, "anexado") > 0)
+        
+        If AnexoFaltando Then
+            Prompt = "Você mencionou um anexo, mas não há nenhum arquivo anexado. Deseja enviar o e-mail mesmo assim?"
+            If MsgBox(Prompt, vbYesNo + vbQuestion + vbMsgBoxSetForeground, "Anexo Faltando") = vbNo Then
+                Cancel = True
+            End If
+        End If
+    End If
+End Sub
