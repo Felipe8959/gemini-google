@@ -1,23 +1,25 @@
 import os
 import zipfile
 import win32com.client
-import paramiko
+import shutil
 
 # Configurações
 email_subject = 'PROT_080_OUV_USUARIOS - Arquivo para VOX'
 save_directory = r'C:\caminho\para\diretorio\local'
-sftp_host = 'sftp.exemplo.com'
-sftp_port = 22
-sftp_username = 'usuario'
-sftp_password = 'senha'
-remote_directory = '/caminho/remoto/para/diretorio'
+network_path = r'\\servidor\pasta_compartilhada'
+network_username = 'usuario'
+network_password = 'senha'
 
 def download_attachment(subject, save_folder):
     # Conecta ao Outlook
     outlook = win32com.client.Dispatch('Outlook.Application')
     mapi = outlook.GetNamespace('MAPI')
     inbox = mapi.GetDefaultFolder(6)  # 6 é a pasta da caixa de entrada
-    messages = inbox.Items
+    
+    # Acessando uma subpasta chamada "Processados" dentro da caixa de entrada
+    subfolder = inbox.Folders['Processados']  # Nome da subpasta
+    
+    messages = subfolder.Items
     
     for message in messages:
         if message.Subject == subject:
@@ -33,18 +35,13 @@ def extract_zip(zip_path, extract_to_folder):
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall(extract_to_folder)
 
-def upload_file_to_sftp(file_path, remote_directory):
-    transport = paramiko.Transport((sftp_host, sftp_port))
-    transport.connect(username=sftp_username, password=sftp_password)
-    
-    sftp = paramiko.SFTPClient.from_transport(transport)
+def upload_file_to_network(file_path, network_path):
+    # Tenta copiar o arquivo para o caminho da rede
     try:
-        remote_path = os.path.join(remote_directory, os.path.basename(file_path))
-        sftp.put(file_path, remote_path)
-        print(f"Arquivo {os.path.basename(file_path)} enviado para {remote_directory}")
-    finally:
-        sftp.close()
-        transport.close()
+        shutil.copy(file_path, network_path)
+        print(f'Arquivo {os.path.basename(file_path)} copiado para {network_path}.')
+    except Exception as e:
+        print(f'Erro ao copiar o arquivo: {e}')
 
 def main():
     zip_file_path = download_attachment(email_subject, save_directory)
@@ -54,8 +51,8 @@ def main():
             for file in files:
                 if file.endswith('.txt'):
                     file_path = os.path.join(root, file)
-                    upload_file_to_sftp(file_path, remote_directory)
-                    print(f'Arquivo {file} enviado para o diretório remoto.')
+                    upload_file_to_network(file_path, network_path)
+                    print(f'Arquivo {file} enviado para o diretório compartilhado.')
     else:
         print('Nenhum anexo encontrado com o assunto especificado.')
 
