@@ -1,119 +1,56 @@
-import imaplib
-
-# Configurações de email
-IMAP_SERVER = 'imap.seu_provedor.com'
-EMAIL_ACCOUNT = 'seu_email@dominio.com'
-EMAIL_PASSWORD = 'sua_senha'
-
-try:
-    # Conectar ao servidor de email
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-    mail.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
-    
-    # Listar pastas disponíveis
-    status, folders = mail.list()
-    if status == "OK":
-        print("Conexão bem-sucedida!")
-        print("Pastas disponíveis:")
-        for folder in folders:
-            print(folder.decode())
-    else:
-        print("Falha ao listar pastas.")
-    
-    # Selecionar a caixa de entrada (inbox) para verificar a quantidade de emails
-    mail.select("inbox")
-    status, message_count = mail.search(None, "ALL")
-    if status == "OK":
-        print(f"Número total de emails na caixa de entrada: {len(message_count[0].split())}")
-    else:
-        print("Falha ao contar os emails na caixa de entrada.")
-
-    # Fechar a conexão
-    mail.logout()
-
-except imaplib.IMAP4.error as e:
-    print(f"Erro ao conectar ao servidor de email: {str(e)}")
-
-
-
-
-
-
-
-
-import imaplib
-import email
-from email.header import decode_header
 import os
 import zipfile
-import paramiko
+import win32com.client
 
-# Configurações de email
-IMAP_SERVER = 'imap.seu_provedor.com'
-EMAIL_ACCOUNT = 'seu_email@dominio.com'
-EMAIL_PASSWORD = 'sua_senha'
+# Configurações
+email_subject = 'PROT_080_OUV_USUARIOS - Arquivo para VOX'
+save_directory = r'C:\caminho\para\diretorio\compartilhado'
+username = 'usuario'
+password = 'senha'
 
-# Configurações do diretório compartilhado (via SFTP)
-SFTP_HOST = 'sftp.dominio.com'
-SFTP_PORT = 22
-SFTP_USER = 'usuario_sftp'
-SFTP_PASSWORD = 'senha_sftp'
-SFTP_DIRECTORY = '/caminho/para/diretorio/compartilhado'
-
-# Conectar ao servidor de email
-mail = imaplib.IMAP4_SSL(IMAP_SERVER)
-mail.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
-mail.select('inbox')
-
-# Buscar emails com o assunto específico
-status, messages = mail.search(None, '(SUBJECT "PROT_080_OUV_USUARIOS - Arquivo para VOX")')
-
-# Verificar se encontrou emails
-if messages[0]:
-    email_ids = messages[0].split()
-    latest_email_id = email_ids[-1]  # Pega o email mais recente
-    status, msg_data = mail.fetch(latest_email_id, '(RFC822)')
+def download_attachment(subject, save_folder):
+    # Conecta ao Outlook
+    outlook = win32com.client.Dispatch('Outlook.Application')
+    mapi = outlook.GetNamespace('MAPI')
+    inbox = mapi.GetDefaultFolder(6)  # 6 é a pasta da caixa de entrada
+    messages = inbox.Items
     
-    for response_part in msg_data:
-        if isinstance(response_part, tuple):
-            msg = email.message_from_bytes(response_part[1])
-            subject, encoding = decode_header(msg["Subject"])[0]
-            if isinstance(subject, bytes):
-                subject = subject.decode(encoding if encoding else 'utf-8')
-            
-            # Procurar o anexo .zip
-            for part in msg.walk():
-                if part.get_content_maintype() == "multipart":
-                    continue
-                if part.get('Content-Disposition') is None:
-                    continue
-                
-                filename = part.get_filename()
-                if filename and filename.endswith('.zip'):
-                    # Salvar o arquivo .zip
-                    filepath = os.path.join('/caminho/para/salvar/temp/', filename)
-                    with open(filepath, 'wb') as f:
-                        f.write(part.get_payload(decode=True))
-                    
-                    # Descompactar o .zip
-                    with zipfile.ZipFile(filepath, 'r') as zip_ref:
-                        zip_ref.extractall('/caminho/para/salvar/temp/')
-                    
-                    # Encontrar o arquivo .txt descompactado
-                    for file in os.listdir('/caminho/para/salvar/temp/'):
-                        if file.endswith('.txt'):
-                            txt_filepath = os.path.join('/caminho/para/salvar/temp/', file)
-                            
-                            # Conectar ao servidor SFTP e enviar o arquivo
-                            transport = paramiko.Transport((SFTP_HOST, SFTP_PORT))
-                            transport.connect(username=SFTP_USER, password=SFTP_PASSWORD)
-                            sftp = paramiko.SFTPClient.from_transport(transport)
-                            sftp.put(txt_filepath, os.path.join(SFTP_DIRECTORY, file))
-                            sftp.close()
-                            transport.close()
-                    
-                    # Limpeza: remover arquivos temporários
-                    os.remove(filepath)
-                    os.remove(txt_filepath)
+    for message in messages:
+        if message.Subject == subject:
+            attachments = message.Attachments
+            for attachment in attachments:
+                if attachment.FileName.endswith('.zip'):
+                    zip_path = os.path.join(save_folder, attachment.FileName)
+                    attachment.SaveAsFile(zip_path)
+                    return zip_path
+    return None
 
-mail.logout()
+def extract_zip(zip_path, extract_to_folder):
+    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+        zip_ref.extractall(extract_to_folder)
+        
+def upload_file_to_shared_directory(file_path, save_directory):
+    # Para SMB ou SFTP, você pode usar bibliotecas como pysmb ou paramiko.
+    # Exemplo com pysmb (deve instalar: pip install pysmb):
+    from smb.SMBConnection import SMBConnection
+    
+    conn = SMBConnection(username, password, 'local_machine', 'remote_server', use_ntlm_v2=True)
+    conn.connect('remote_server_ip', 139)
+    with open(file_path, 'rb') as file_obj:
+        conn.storeFile('shared_directory', os.path.basename(file_path), file_obj)
+
+def main():
+    zip_file_path = download_attachment(email_subject, save_directory)
+    if zip_file_path:
+        extract_zip(zip_file_path, save_directory)
+        for root, _, files in os.walk(save_directory):
+            for file in files:
+                if file.endswith('.txt'):
+                    file_path = os.path.join(root, file)
+                    upload_file_to_shared_directory(file_path, save_directory)
+                    print(f'Arquivo {file} enviado para o diretório compartilhado.')
+    else:
+        print('Nenhum anexo encontrado com o assunto especificado.')
+
+if __name__ == '__main__':
+    main()
