@@ -19,8 +19,11 @@ def download_attachment(subject, save_folder):
     # Acessando uma subpasta chamada "Processados" dentro da caixa de entrada
     subfolder = inbox.Folders['Processados']  # Nome da subpasta
     
+    # Ordenar os emails por data, do mais recente ao mais antigo
     messages = subfolder.Items
-    
+    messages.Sort("[ReceivedTime]", True)
+
+    # Iterar pelo email mais recente primeiro
     for message in messages:
         if message.Subject == subject:
             attachments = message.Attachments
