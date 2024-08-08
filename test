@@ -2,6 +2,8 @@ import os
 import zipfile
 import win32com.client
 import shutil
+import logging
+import time
 
 # Configurações
 email_subject = 'PROT_080_OUV_USUARIOS - Arquivo para VOX'
@@ -10,43 +12,49 @@ network_path = r'\\servidor\pasta_compartilhada'
 network_username = 'usuario'
 network_password = 'senha'
 
+# Configuração do logging
+logging.basicConfig(filename='processamento.log', level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
+
 def download_attachment(subject, save_folder):
-    # Conecta ao Outlook
+    logging.info('Conectando ao Outlook...')
     outlook = win32com.client.Dispatch('Outlook.Application')
     mapi = outlook.GetNamespace('MAPI')
     inbox = mapi.GetDefaultFolder(6)  # 6 é a pasta da caixa de entrada
     
-    # Acessando uma subpasta chamada "Processados" dentro da caixa de entrada
     subfolder = inbox.Folders['Processados']  # Nome da subpasta
-    
-    # Ordenar os emails por data, do mais recente ao mais antigo
     messages = subfolder.Items
     messages.Sort("[ReceivedTime]", True)
 
-    # Iterar pelo email mais recente primeiro
+    logging.info(f'Procurando por email com o assunto: {subject}')
     for message in messages:
         if message.Subject == subject:
+            logging.info(f'Email encontrado: {message.Subject}, de {message.SenderName}')
             attachments = message.Attachments
             for attachment in attachments:
                 if attachment.FileName.endswith('.zip'):
                     zip_path = os.path.join(save_folder, attachment.FileName)
                     attachment.SaveAsFile(zip_path)
+                    logging.info(f'Anexo salvo em: {zip_path}')
                     return zip_path
+    logging.warning(f'Nenhum email encontrado com o assunto: {subject}')
     return None
 
 def extract_zip(zip_path, extract_to_folder):
+    logging.info(f'Extraindo arquivo {zip_path}')
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall(extract_to_folder)
+    logging.info(f'Arquivos extraídos para: {extract_to_folder}')
 
 def upload_file_to_network(file_path, network_path):
-    # Tenta copiar o arquivo para o caminho da rede
     try:
         shutil.copy(file_path, network_path)
-        print(f'Arquivo {os.path.basename(file_path)} copiado para {network_path}.')
+        logging.info(f'Arquivo {os.path.basename(file_path)} copiado para {network_path}')
     except Exception as e:
-        print(f'Erro ao copiar o arquivo: {e}')
+        logging.error(f'Erro ao copiar o arquivo para {network_path}: {e}')
 
 def main():
+    logging.info('Iniciando processo de download e extração de anexo.')
     zip_file_path = download_attachment(email_subject, save_directory)
     if zip_file_path:
         extract_zip(zip_file_path, save_directory)
@@ -55,9 +63,12 @@ def main():
                 if file.endswith('.txt'):
                     file_path = os.path.join(root, file)
                     upload_file_to_network(file_path, network_path)
-                    print(f'Arquivo {file} enviado para o diretório compartilhado.')
+                    logging.info(f'Arquivo {file} enviado para o diretório compartilhado.')
     else:
-        print('Nenhum anexo encontrado com o assunto especificado.')
+        logging.warning('Nenhum anexo encontrado com o assunto especificado.')
+    logging.info('Processo concluído.')
 
 if __name__ == '__main__':
     main()
+    logging.info('Aguardando 10 segundos antes de fechar.')
+    time.sleep(10)
