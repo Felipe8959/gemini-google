@@ -1,4 +1,47 @@
 import imaplib
+
+# Configurações de email
+IMAP_SERVER = 'imap.seu_provedor.com'
+EMAIL_ACCOUNT = 'seu_email@dominio.com'
+EMAIL_PASSWORD = 'sua_senha'
+
+try:
+    # Conectar ao servidor de email
+    mail = imaplib.IMAP4_SSL(IMAP_SERVER)
+    mail.login(EMAIL_ACCOUNT, EMAIL_PASSWORD)
+    
+    # Listar pastas disponíveis
+    status, folders = mail.list()
+    if status == "OK":
+        print("Conexão bem-sucedida!")
+        print("Pastas disponíveis:")
+        for folder in folders:
+            print(folder.decode())
+    else:
+        print("Falha ao listar pastas.")
+    
+    # Selecionar a caixa de entrada (inbox) para verificar a quantidade de emails
+    mail.select("inbox")
+    status, message_count = mail.search(None, "ALL")
+    if status == "OK":
+        print(f"Número total de emails na caixa de entrada: {len(message_count[0].split())}")
+    else:
+        print("Falha ao contar os emails na caixa de entrada.")
+
+    # Fechar a conexão
+    mail.logout()
+
+except imaplib.IMAP4.error as e:
+    print(f"Erro ao conectar ao servidor de email: {str(e)}")
+
+
+
+
+
+
+
+
+import imaplib
 import email
 from email.header import decode_header
 import os
