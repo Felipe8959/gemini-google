@@ -1,12 +1,16 @@
 import os
 import zipfile
 import win32com.client
+import paramiko
 
 # Configurações
 email_subject = 'PROT_080_OUV_USUARIOS - Arquivo para VOX'
-save_directory = r'C:\caminho\para\diretorio\compartilhado'
-username = 'usuario'
-password = 'senha'
+save_directory = r'C:\caminho\para\diretorio\local'
+sftp_host = 'sftp.exemplo.com'
+sftp_port = 22
+sftp_username = 'usuario'
+sftp_password = 'senha'
+remote_directory = '/caminho/remoto/para/diretorio'
 
 def download_attachment(subject, save_folder):
     # Conecta ao Outlook
@@ -28,16 +32,19 @@ def download_attachment(subject, save_folder):
 def extract_zip(zip_path, extract_to_folder):
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
         zip_ref.extractall(extract_to_folder)
-        
-def upload_file_to_shared_directory(file_path, save_directory):
-    # Para SMB ou SFTP, você pode usar bibliotecas como pysmb ou paramiko.
-    # Exemplo com pysmb (deve instalar: pip install pysmb):
-    from smb.SMBConnection import SMBConnection
+
+def upload_file_to_sftp(file_path, remote_directory):
+    transport = paramiko.Transport((sftp_host, sftp_port))
+    transport.connect(username=sftp_username, password=sftp_password)
     
-    conn = SMBConnection(username, password, 'local_machine', 'remote_server', use_ntlm_v2=True)
-    conn.connect('remote_server_ip', 139)
-    with open(file_path, 'rb') as file_obj:
-        conn.storeFile('shared_directory', os.path.basename(file_path), file_obj)
+    sftp = paramiko.SFTPClient.from_transport(transport)
+    try:
+        remote_path = os.path.join(remote_directory, os.path.basename(file_path))
+        sftp.put(file_path, remote_path)
+        print(f"Arquivo {os.path.basename(file_path)} enviado para {remote_directory}")
+    finally:
+        sftp.close()
+        transport.close()
 
 def main():
     zip_file_path = download_attachment(email_subject, save_directory)
@@ -47,8 +54,8 @@ def main():
             for file in files:
                 if file.endswith('.txt'):
                     file_path = os.path.join(root, file)
-                    upload_file_to_shared_directory(file_path, save_directory)
-                    print(f'Arquivo {file} enviado para o diretório compartilhado.')
+                    upload_file_to_sftp(file_path, remote_directory)
+                    print(f'Arquivo {file} enviado para o diretório remoto.')
     else:
         print('Nenhum anexo encontrado com o assunto especificado.')
 
