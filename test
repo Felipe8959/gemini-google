@@ -16,6 +16,22 @@ network_password = 'senha'
 logging.basicConfig(filename='processamento.log', level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 
+def map_network_drive(network_path, username, password):
+    logging.info('Tentando mapear a unidade de rede...')
+    try:
+        os.system(f'net use {network_path} /user:{username} {password}')
+        logging.info('Unidade de rede mapeada com sucesso.')
+    except Exception as e:
+        logging.error(f'Erro ao mapear a unidade de rede: {e}')
+
+def unmap_network_drive(network_path):
+    logging.info('Tentando desmapear a unidade de rede...')
+    try:
+        os.system(f'net use {network_path} /delete')
+        logging.info('Unidade de rede desmapeada com sucesso.')
+    except Exception as e:
+        logging.error(f'Erro ao desmapear a unidade de rede: {e}')
+
 def download_attachment(subject, save_folder):
     logging.info('Conectando ao Outlook...')
     outlook = win32com.client.Dispatch('Outlook.Application')
@@ -46,12 +62,15 @@ def extract_zip(zip_path, extract_to_folder):
         zip_ref.extractall(extract_to_folder)
     logging.info(f'Arquivos extraídos para: {extract_to_folder}')
 
-def upload_file_to_network(file_path, network_path):
+def upload_file_to_network(file_path, network_path, username, password):
+    map_network_drive(network_path, username, password)
     try:
         shutil.copy(file_path, network_path)
         logging.info(f'Arquivo {os.path.basename(file_path)} copiado para {network_path}')
     except Exception as e:
         logging.error(f'Erro ao copiar o arquivo para {network_path}: {e}')
+    finally:
+        unmap_network_drive(network_path)
 
 def main():
     logging.info('Iniciando processo de download e extração de anexo.')
@@ -62,7 +81,7 @@ def main():
             for file in files:
                 if file.endswith('.txt'):
                     file_path = os.path.join(root, file)
-                    upload_file_to_network(file_path, network_path)
+                    upload_file_to_network(file_path, network_path, network_username, network_password)
                     logging.info(f'Arquivo {file} enviado para o diretório compartilhado.')
     else:
         logging.warning('Nenhum anexo encontrado com o assunto especificado.')
