@@ -1,93 +1,30 @@
-import os
-import zipfile
-import win32com.client
-import shutil
-import logging
-import time
+import pandas as pd
 
-# Configurações
-email_subject = 'PROT_080_OUV_USUARIOS - Arquivo para VOX'
-save_directory = r'C:\caminho\para\diretorio\local'
-network_path = r'\\servidor\pasta_compartilhada'
-network_username = 'usuario'
-network_password = 'senha'
+# Exemplo do DataFrame df_distribuicao
+df_distribuicao = pd.DataFrame({
+    'DISTRIBUICAO': ['Manif1', 'Manif2', 'Manif3'],
+    'STATUS MANIF': ['RESPONDIDO', 'EM ANÁLISE', 'RESPONDIDO']
+})
 
-# Configuração do logging
-logging.basicConfig(filename='processamento.log', level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+# Exemplo do DataFrame df_analistas
+df_analistas = pd.DataFrame({
+    'ANALISTA': ['João', 'Maria', 'Pedro'],
+    'ANALISTA QUALIDADE': ['X', 'X', ''],
+    'STATUS MANIF': ['RESPONDIDO', 'RESPONDIDO', 'RESPONDIDO']
+})
 
-def map_network_drive(network_path, username, password):
-    logging.info('Tentando mapear a unidade de rede...')
-    try:
-        os.system(f'net use {network_path} /user:{username} {password}')
-        logging.info('Unidade de rede mapeada com sucesso.')
-    except Exception as e:
-        logging.error(f'Erro ao mapear a unidade de rede: {e}')
+# Filtrando os analistas que têm 'ANALISTA QUALIDADE' marcado com 'X'
+analistas_disponiveis = df_analistas[df_analistas['ANALISTA QUALIDADE'] == 'X']
 
-def unmap_network_drive(network_path):
-    logging.info('Tentando desmapear a unidade de rede...')
-    try:
-        os.system(f'net use {network_path} /delete')
-        logging.info('Unidade de rede desmapeada com sucesso.')
-    except Exception as e:
-        logging.error(f'Erro ao desmapear a unidade de rede: {e}')
+# Filtrando as linhas do DataFrame 'df_distribuicao' que estão com 'STATUS MANIF' igual a 'RESPONDIDO'
+manif_respondidas = df_distribuicao[df_distribuicao['STATUS MANIF'] == 'RESPONDIDO']
 
-def download_attachment(subject, save_folder):
-    logging.info('Conectando ao Outlook...')
-    outlook = win32com.client.Dispatch('Outlook.Application')
-    mapi = outlook.GetNamespace('MAPI')
-    inbox = mapi.GetDefaultFolder(6)  # 6 é a pasta da caixa de entrada
-    
-    subfolder = inbox.Folders['Processados']  # Nome da subpasta
-    messages = subfolder.Items
-    messages.Sort("[ReceivedTime]", True)
+# Resetando o índice para facilitar a atribuição
+manif_respondidas.reset_index(drop=True, inplace=True)
+analistas_disponiveis.reset_index(drop=True, inplace=True)
 
-    logging.info(f'Procurando por email com o assunto: {subject}')
-    for message in messages:
-        if message.Subject == subject:
-            logging.info(f'Email encontrado: {message.Subject}, de {message.SenderName}')
-            attachments = message.Attachments
-            for attachment in attachments:
-                if attachment.FileName.endswith('.zip'):
-                    zip_path = os.path.join(save_folder, attachment.FileName)
-                    attachment.SaveAsFile(zip_path)
-                    logging.info(f'Anexo salvo em: {zip_path}')
-                    return zip_path
-    logging.warning(f'Nenhum email encontrado com o assunto: {subject}')
-    return None
+# Fazendo a distribuição dos analistas disponíveis nas manifestações respondidas
+manif_respondidas['ANALISTA'] = analistas_disponiveis['ANALISTA']
 
-def extract_zip(zip_path, extract_to_folder):
-    logging.info(f'Extraindo arquivo {zip_path}')
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_to_folder)
-    logging.info(f'Arquivos extraídos para: {extract_to_folder}')
-
-def upload_file_to_network(file_path, network_path, username, password):
-    map_network_drive(network_path, username, password)
-    try:
-        shutil.copy(file_path, network_path)
-        logging.info(f'Arquivo {os.path.basename(file_path)} copiado para {network_path}')
-    except Exception as e:
-        logging.error(f'Erro ao copiar o arquivo para {network_path}: {e}')
-    finally:
-        unmap_network_drive(network_path)
-
-def main():
-    logging.info('Iniciando processo de download e extração de anexo.')
-    zip_file_path = download_attachment(email_subject, save_directory)
-    if zip_file_path:
-        extract_zip(zip_file_path, save_directory)
-        for root, _, files in os.walk(save_directory):
-            for file in files:
-                if file.endswith('.txt'):
-                    file_path = os.path.join(root, file)
-                    upload_file_to_network(file_path, network_path, network_username, network_password)
-                    logging.info(f'Arquivo {file} enviado para o diretório compartilhado.')
-    else:
-        logging.warning('Nenhum anexo encontrado com o assunto especificado.')
-    logging.info('Processo concluído.')
-
-if __name__ == '__main__':
-    main()
-    logging.info('Aguardando 10 segundos antes de fechar.')
-    time.sleep(10)
+# Verificando o DataFrame resultante
+print(manif_respondidas)
