@@ -1,27 +1,54 @@
 import os
 import win32com.client
 
+def baixar_anexos(outlook, pasta, assunto_especifico, pasta_destino):
+    """
+    Função para baixar anexos do último e-mail com o assunto específico.
+    """
+    # Acessando a pasta de entrada (caixa principal ou mapeada)
+    caixa_de_entrada = outlook.Folders[pasta].Folders['Caixa de Entrada']
+
+    # Iterando pelos emails (do mais recente para o mais antigo)
+    emails = caixa_de_entrada.Items
+    emails.Sort("[ReceivedTime]", True)  # Ordena os e-mails pela data de recebimento (mais recentes primeiro)
+    
+    # Procurando o último e-mail com o assunto específico
+    for email in emails:
+        if assunto_especifico in email.Subject:
+            print(f"Email encontrado: {email.Subject}")
+            for anexo in email.Attachments:
+                caminho_arquivo = os.path.join(pasta_destino, anexo.FileName)
+                anexo.SaveAsFile(caminho_arquivo)
+                print(f"Anexo {anexo.FileName} salvo em {caminho_arquivo}")
+            break  # Encerra a busca após encontrar o e-mail
+
 # Conectando ao Outlook
 outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
 
-# Selecionando a caixa de entrada mapeada
-# Altere o índice conforme a posição da caixa de entrada mapeada (0 é a principal)
-caixa_de_entrada = outlook.Folders['Nome da Caixa Mapeada'].Folders['Caixa de Entrada']
+# Especificações para os diferentes e-mails
+emails_para_buscar = [
+    {
+        "pasta": "4960/010 - INTELIG. COMPETITIVA E SISTEMAS",  # Caixa mapeada
+        "assunto": "Planilha de Recursos",
+        "pasta_destino": r"C:\Users\i442761\Desktop\posic diaria"
+    },
+    {
+        "pasta": "Caixa de Correio - Seu Nome",  # Caixa principal (substitua 'Seu Nome' pelo nome da caixa)
+        "assunto": "Manifestações Abertas - Bacen (OuvidoriaDM)",
+        "pasta_destino": r"C:\Users\i442761\Desktop\manif_bacen"
+    },
+    {
+        "pasta": "Caixa de Correio - Seu Nome",  # Caixa principal (substitua 'Seu Nome' pelo nome da caixa)
+        "assunto": "BASE_FECHADAS_BACEN_PARA_RANKING",
+        "pasta_destino": r"C:\Users\i442761\Desktop\base_fechadas_bacen"
+    }
+]
 
-# Defina o assunto específico que você está procurando
-assunto_especifico = "Assunto do Email"
-
-# Pasta onde o anexo será salvo
-pasta_destino = "C:/caminho/para/salvar/anexo"
-
-# Iterando pelos emails
-for email in caixa_de_entrada.Items:
-    if assunto_especifico in email.Subject:
-        for anexo in email.Attachments:
-            # Salvando o anexo
-            caminho_arquivo = os.path.join(pasta_destino, anexo.FileName)
-            anexo.SaveAsFile(caminho_arquivo)
-            print(f"Anexo {anexo.FileName} salvo em {caminho_arquivo}")
-
-        # Sai do loop após encontrar o e-mail
-        break
+# Iterando pela lista de e-mails e baixando os anexos
+for email_info in emails_para_buscar:
+    baixar_anexos(
+        outlook, 
+        email_info["pasta"], 
+        email_info["assunto"], 
+        email_info["pasta_destino"]
+    )
