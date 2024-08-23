@@ -1,30 +1,27 @@
-import pandas as pd
+import os
+import win32com.client
 
-# Exemplo do DataFrame df_distribuicao
-df_distribuicao = pd.DataFrame({
-    'DISTRIBUICAO': ['Manif1', 'Manif2', 'Manif3'],
-    'STATUS MANIF': ['RESPONDIDO', 'EM ANÁLISE', 'RESPONDIDO']
-})
+# Conectando ao Outlook
+outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
 
-# Exemplo do DataFrame df_analistas
-df_analistas = pd.DataFrame({
-    'ANALISTA': ['João', 'Maria', 'Pedro'],
-    'ANALISTA QUALIDADE': ['X', 'X', ''],
-    'STATUS MANIF': ['RESPONDIDO', 'RESPONDIDO', 'RESPONDIDO']
-})
+# Selecionando a caixa de entrada mapeada
+# Altere o índice conforme a posição da caixa de entrada mapeada (0 é a principal)
+caixa_de_entrada = outlook.Folders['Nome da Caixa Mapeada'].Folders['Caixa de Entrada']
 
-# Filtrando os analistas que têm 'ANALISTA QUALIDADE' marcado com 'X'
-analistas_disponiveis = df_analistas[df_analistas['ANALISTA QUALIDADE'] == 'X']
+# Defina o assunto específico que você está procurando
+assunto_especifico = "Assunto do Email"
 
-# Filtrando as linhas do DataFrame 'df_distribuicao' que estão com 'STATUS MANIF' igual a 'RESPONDIDO'
-manif_respondidas = df_distribuicao[df_distribuicao['STATUS MANIF'] == 'RESPONDIDO']
+# Pasta onde o anexo será salvo
+pasta_destino = "C:/caminho/para/salvar/anexo"
 
-# Resetando o índice para facilitar a atribuição
-manif_respondidas.reset_index(drop=True, inplace=True)
-analistas_disponiveis.reset_index(drop=True, inplace=True)
+# Iterando pelos emails
+for email in caixa_de_entrada.Items:
+    if assunto_especifico in email.Subject:
+        for anexo in email.Attachments:
+            # Salvando o anexo
+            caminho_arquivo = os.path.join(pasta_destino, anexo.FileName)
+            anexo.SaveAsFile(caminho_arquivo)
+            print(f"Anexo {anexo.FileName} salvo em {caminho_arquivo}")
 
-# Fazendo a distribuição dos analistas disponíveis nas manifestações respondidas
-manif_respondidas['ANALISTA'] = analistas_disponiveis['ANALISTA']
-
-# Verificando o DataFrame resultante
-print(manif_respondidas)
+        # Sai do loop após encontrar o e-mail
+        break
