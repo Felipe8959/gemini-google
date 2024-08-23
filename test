@@ -1,3 +1,87 @@
+Sub BaixarAnexosDosEmails()
+
+    ' Declaração de variáveis
+    Dim OutlookApp As Object
+    Dim OutlookNamespace As Object
+    Dim FolderPosicaoDiaria As Object
+    Dim FolderCaixaMapeada As Object
+    Dim EmailItem As Object
+    Dim Anexo As Object
+    Dim UltimoEmail As Object
+    Dim PastaDestino As String
+    
+    ' Caminho de destino dos anexos
+    PastaDestino = "C:\Anexos\"
+    
+    ' Inicializa o Outlook
+    Set OutlookApp = CreateObject("Outlook.Application")
+    Set OutlookNamespace = OutlookApp.GetNamespace("MAPI")
+    
+    ' Obtém a pasta "Posição diária" na caixa de entrada principal
+    Set FolderPosicaoDiaria = OutlookNamespace.Folders("Caixa de Entrada").Folders("Posição diária")
+    
+    ' Verifica e baixa anexos do e-mail com assunto "Manifestações Abertas - Bacen (OuvidoriaDM)"
+    Set UltimoEmail = ObterUltimoEmail(FolderPosicaoDiaria, "Manifestações Abertas - Bacen (OuvidoriaDM)")
+    If Not UltimoEmail Is Nothing Then
+        BaixarAnexosDoEmail UltimoEmail, PastaDestino
+    End If
+    
+    ' Verifica e baixa anexos do e-mail com assunto "BASE_FECHADAS_BACEN_PARA_RANKING"
+    Set UltimoEmail = ObterUltimoEmail(FolderPosicaoDiaria, "BASE_FECHADAS_BACEN_PARA_RANKING")
+    If Not UltimoEmail Is Nothing Then
+        BaixarAnexosDoEmail UltimoEmail, PastaDestino
+    End If
+    
+    ' Obtém a pasta "4960/010" mapeada
+    Set FolderCaixaMapeada = OutlookNamespace.Folders("4960/010").Folders("Caixa de Entrada")
+    
+    ' Verifica e baixa anexos do e-mail com assunto "Planilha de Recursos"
+    Set UltimoEmail = ObterUltimoEmail(FolderCaixaMapeada, "Planilha de Recursos")
+    If Not UltimoEmail Is Nothing Then
+        BaixarAnexosDoEmail UltimoEmail, PastaDestino
+    End If
+    
+    MsgBox "Anexos baixados com sucesso!"
+    
+End Sub
+
+' Função para obter o último e-mail com o assunto especificado
+Function ObterUltimoEmail(Folder As Object, Assunto As String) As Object
+    Dim EmailItem As Object
+    Dim UltimoEmail As Object
+    Dim DataMaior As Date
+    
+    DataMaior = #1/1/1900# ' Define uma data inicial muito antiga
+    
+    ' Loop através dos e-mails da pasta
+    For Each EmailItem In Folder.Items
+        If EmailItem.Subject = Assunto And EmailItem.ReceivedTime > DataMaior Then
+            Set UltimoEmail = EmailItem
+            DataMaior = EmailItem.ReceivedTime
+        End If
+    Next EmailItem
+    
+    Set ObterUltimoEmail = UltimoEmail
+End Function
+
+' Sub para baixar os anexos de um e-mail
+Sub BaixarAnexosDoEmail(EmailItem As Object, PastaDestino As String)
+    Dim Anexo As Object
+    
+    ' Loop através dos anexos do e-mail
+    For Each Anexo In EmailItem.Attachments
+        Anexo.SaveAsFile PastaDestino & Anexo.FileName
+    Next Anexo
+End Sub
+
+
+
+
+
+
+
+
+
 import os
 import win32com.client
 
