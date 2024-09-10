@@ -1,138 +1,221 @@
-Sub BaixarAnexosDosEmails()
-
-    ' Declaração de variáveis
-    Dim OutlookApp As Object
-    Dim OutlookNamespace As Object
-    Dim FolderPosicaoDiaria As Object
-    Dim FolderCaixaMapeada As Object
-    Dim EmailItem As Object
-    Dim Anexo As Object
-    Dim UltimoEmail As Object
-    Dim PastaDestino As String
-    
-    ' Caminho de destino dos anexos
-    PastaDestino = "C:\Anexos\"
-    
-    ' Inicializa o Outlook
-    Set OutlookApp = CreateObject("Outlook.Application")
-    Set OutlookNamespace = OutlookApp.GetNamespace("MAPI")
-    
-    ' Obtém a pasta "Posição diária" na caixa de entrada principal
-    Set FolderPosicaoDiaria = OutlookNamespace.Folders("Caixa de Entrada").Folders("Posição diária")
-    
-    ' Verifica e baixa anexos do e-mail com assunto "Manifestações Abertas - Bacen (OuvidoriaDM)"
-    Set UltimoEmail = ObterUltimoEmail(FolderPosicaoDiaria, "Manifestações Abertas - Bacen (OuvidoriaDM)")
-    If Not UltimoEmail Is Nothing Then
-        BaixarAnexosDoEmail UltimoEmail, PastaDestino
-    End If
-    
-    ' Verifica e baixa anexos do e-mail com assunto "BASE_FECHADAS_BACEN_PARA_RANKING"
-    Set UltimoEmail = ObterUltimoEmail(FolderPosicaoDiaria, "BASE_FECHADAS_BACEN_PARA_RANKING")
-    If Not UltimoEmail Is Nothing Then
-        BaixarAnexosDoEmail UltimoEmail, PastaDestino
-    End If
-    
-    ' Obtém a pasta "4960/010" mapeada
-    Set FolderCaixaMapeada = OutlookNamespace.Folders("4960/010").Folders("Caixa de Entrada")
-    
-    ' Verifica e baixa anexos do e-mail com assunto "Planilha de Recursos"
-    Set UltimoEmail = ObterUltimoEmail(FolderCaixaMapeada, "Planilha de Recursos")
-    If Not UltimoEmail Is Nothing Then
-        BaixarAnexosDoEmail UltimoEmail, PastaDestino
-    End If
-    
-    MsgBox "Anexos baixados com sucesso!"
-    
-End Sub
-
-' Função para obter o último e-mail com o assunto especificado
-Function ObterUltimoEmail(Folder As Object, Assunto As String) As Object
-    Dim EmailItem As Object
-    Dim UltimoEmail As Object
-    Dim DataMaior As Date
-    
-    DataMaior = #1/1/1900# ' Define uma data inicial muito antiga
-    
-    ' Loop através dos e-mails da pasta
-    For Each EmailItem In Folder.Items
-        If EmailItem.Subject = Assunto And EmailItem.ReceivedTime > DataMaior Then
-            Set UltimoEmail = EmailItem
-            DataMaior = EmailItem.ReceivedTime
-        End If
-    Next EmailItem
-    
-    Set ObterUltimoEmail = UltimoEmail
-End Function
-
-' Sub para baixar os anexos de um e-mail
-Sub BaixarAnexosDoEmail(EmailItem As Object, PastaDestino As String)
-    Dim Anexo As Object
-    
-    ' Loop através dos anexos do e-mail
-    For Each Anexo In EmailItem.Attachments
-        Anexo.SaveAsFile PastaDestino & Anexo.FileName
-    Next Anexo
-End Sub
+1. Pré-processamento dos dados
+Coluna 'Texto Manifestação': Use técnicas de processamento de linguagem natural (NLP) para analisar o texto. Você pode limpar o texto (remoção de stopwords, tokenização, stemming/lemmatização).
+Classificação do tom: Utilize uma ferramenta de análise de sentimento, como VADER, TextBlob, ou até mesmo modelos pré-treinados, como BERT, para classificar o tom da reclamação (positivo, negativo, neutro). Isso pode ser transformado em uma coluna de "sentimento" ou "tom".
+2. Atribuir Experiência aos Analistas
+Crie uma métrica de experiência para cada analista, que pode ser baseada em:
+Anos de trabalho.
+Número de protocolos resolvidos.
+Avaliações de desempenho.
+Capacidade de lidar com reclamações de alta severidade (com tom negativo).
+Mapeie os analistas para classes de experiência (novato, intermediário, experiente).
+3. Modelagem
+Treinamento: Com base nos dados de histórico de redirecionamento (caso exista), treine um modelo supervisionado (como uma árvore de decisão, regressão logística ou redes neurais simples) para prever o analista ideal com base no tom e na complexidade do caso.
+Se você não tiver um histórico definido, pode utilizar regras manuais (baseadas em heurísticas) e aplicar aprendizado por reforço para ajustar o modelo ao longo do tempo.
+4. Criação de Pipeline no Databricks
+Spark NLP: Você pode usar o Spark NLP para processar grandes volumes de texto e extrair o tom da reclamação de maneira distribuída.
+AutoML: Aproveite a funcionalidade AutoML do Databricks para testar diferentes modelos automaticamente e escolher o melhor.
+Pipeline de ML: Configure o pipeline de machine learning com:
+Pré-processamento do texto.
+Extração de features (tom, complexidade, urgência).
+Predição do analista com base nas features.
+5. Validação e Acompanhamento
+Após treinar o modelo, avalie seu desempenho com métricas como precisão, recall e F1-score.
+Use feedback contínuo dos analistas para ajustar o modelo, permitindo que ele aprenda e melhore suas predições ao longo do tempo.
 
 
 
+# ----------------------------------------------------------------------------
+
+
+# 1. Importando bibliotecas necessárias
+# Bibliotecas para manipulação de dados
+import pandas as pd
+import numpy as np
+
+# Bibliotecas para NLP
+from sklearn.feature_extraction.text import TfidfVectorizer
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+# Bibliotecas de Machine Learning
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score, classification_report
+
+# Spark para processamento distribuído
+from pyspark.sql import SparkSession
+spark = SparkSession.builder.appName("ProtocolRouting").getOrCreate()
+
+# Biblioteca de visualização
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+2. Carregar os dados
+# Exemplo de como carregar dados (supondo que você tenha dados em um DataFrame)
+# Aqui estamos assumindo que o Databricks já tenha carregado o arquivo no DBFS
+
+df = spark.read.csv("/dbfs/mnt/data/protocolos.csv", header=True, inferSchema=True)
+df = df.toPandas()
+
+# Visualizando as primeiras linhas do DataFrame
+df.head()
+
+
+# 3. Análise de Sentimento no Texto da Manifestação
+# Inicializando o analisador de sentimento
+sid = SentimentIntensityAnalyzer()
+
+# Função para classificar o sentimento
+def classify_sentiment(text):
+    sentiment_score = sid.polarity_scores(text)['compound']
+    if sentiment_score >= 0.05:
+        return 'positive'
+    elif sentiment_score <= -0.05:
+        return 'negative'
+    else:
+        return 'neutral'
+
+# Aplicando a função ao DataFrame
+df['sentimento'] = df['Texto Manifestação'].apply(classify_sentiment)
+
+# Visualizando a nova coluna de sentimentos
+df[['Texto Manifestação', 'sentimento']].head()
+
+
+# 4. Atribuir Experiência aos Analistas
+# Supomos que a coluna 'Analista' e 'Experiência' já existam no DataFrame
+# Se não, você pode criar essas informações manualmente com base em heurísticas
+
+# Exemplo de classificação de experiência
+def classify_experience(experience_years):
+    if experience_years < 2:
+        return 'novato'
+    elif 2 <= experience_years < 5:
+        return 'intermediário'
+    else:
+        return 'experiente'
+
+# Aplicando a função de experiência
+df['categoria_experiencia'] = df['Anos_Experiencia'].apply(classify_experience)
+
+# Visualizando o DataFrame atualizado
+df[['Analista', 'Anos_Experiencia', 'categoria_experiencia']].head()
 
 
 
 
+# 5. Feature Engineering e Treinamento do Modelo
+# Convertendo o texto para features numéricas usando TF-IDF
+vectorizer = TfidfVectorizer(stop_words='english', max_features=1000)
+X_text = vectorizer.fit_transform(df['Texto Manifestação'])
+
+# Transformando as colunas categóricas
+X_features = pd.concat([pd.DataFrame(X_text.toarray()), 
+                        pd.get_dummies(df[['sentimento', 'categoria_experiencia']])], axis=1)
+
+# Target: o analista a ser selecionado
+y = df['Analista']
+
+# Dividindo os dados em treino e teste
+X_train, X_test, y_train, y_test = train_test_split(X_features, y, test_size=0.2, random_state=42)
+
+# Treinamento de um modelo de classificação (Random Forest)
+model = RandomForestClassifier()
+model.fit(X_train, y_train)
+
+# Predições
+y_pred = model.predict(X_test)
+
+# Avaliando o modelo
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print(classification_report(y_test, y_pred))
 
 
-import os
-import win32com.client
+# 6. Avaliação e Acompanhamento
+# Visualizando a importância das features
+importances = model.feature_importances_
+indices = np.argsort(importances)[::-1]
 
-def baixar_anexos(outlook, pasta, assunto_especifico, pasta_destino):
-    """
-    Função para baixar anexos do último e-mail com o assunto específico.
-    """
-    # Acessando a pasta de entrada (caixa principal ou mapeada)
-    caixa_de_entrada = outlook.Folders[pasta].Folders['Caixa de Entrada']
+# Exibindo as 10 principais features
+plt.figure(figsize=(10,6))
+plt.title("Importância das Features")
+sns.barplot(x=importances[indices][:10], y=np.array(vectorizer.get_feature_names())[indices][:10])
+plt.show()
 
-    # Iterando pelos emails (do mais recente para o mais antigo)
-    emails = caixa_de_entrada.Items
-    emails.Sort("[ReceivedTime]", True)  # Ordena os e-mails pela data de recebimento (mais recentes primeiro)
-    
-    # Procurando o último e-mail com o assunto específico
-    for email in emails:
-        if assunto_especifico in email.Subject:
-            print(f"Email encontrado: {email.Subject}")
-            for anexo in email.Attachments:
-                caminho_arquivo = os.path.join(pasta_destino, anexo.FileName)
-                anexo.SaveAsFile(caminho_arquivo)
-                print(f"Anexo {anexo.FileName} salvo em {caminho_arquivo}")
-            break  # Encerra a busca após encontrar o e-mail
 
-# Conectando ao Outlook
-outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
 
-# Especificações para os diferentes e-mails
-emails_para_buscar = [
-    {
-        "pasta": "4960/010 - INTELIG. COMPETITIVA E SISTEMAS",  # Caixa mapeada
-        "assunto": "Planilha de Recursos",
-        "pasta_destino": r"C:\Users\i442761\Desktop\posic diaria"
-    },
-    {
-        "pasta": "Caixa de Correio - Seu Nome",  # Caixa principal (substitua 'Seu Nome' pelo nome da caixa)
-        "assunto": "Manifestações Abertas - Bacen (OuvidoriaDM)",
-        "pasta_destino": r"C:\Users\i442761\Desktop\manif_bacen"
-    },
-    {
-        "pasta": "Caixa de Correio - Seu Nome",  # Caixa principal (substitua 'Seu Nome' pelo nome da caixa)
-        "assunto": "BASE_FECHADAS_BACEN_PARA_RANKING",
-        "pasta_destino": r"C:\Users\i442761\Desktop\base_fechadas_bacen"
-    }
-]
+# 7. Salvando o Modelo para Uso em Produção
+# Salvando o modelo para uso posterior
+import joblib
+joblib.dump(model, "/dbfs/mnt/data/modelo_redirecionamento.pkl")
 
-# Iterando pela lista de e-mails e baixando os anexos
-for email_info in emails_para_buscar:
-    baixar_anexos(
-        outlook, 
-        email_info["pasta"], 
-        email_info["assunto"], 
-        email_info["pasta_destino"]
-    )
+
+
+# 8. Pipeline para Inferência em Novos Dados
+# Carregar o modelo
+model = joblib.load("/dbfs/mnt/data/modelo_redirecionamento.pkl")
+
+# Exemplo de inferência com novos dados
+novo_protocolo = ["O serviço está horrível, ninguém resolve o problema!"]
+
+# Pré-processamento
+novo_protocolo_tfidf = vectorizer.transform(novo_protocolo)
+novo_protocolo_features = pd.concat([pd.DataFrame(novo_protocolo_tfidf.toarray()), 
+                                     pd.get_dummies(pd.DataFrame([{'sentimento': 'negative', 
+                                                                   'categoria_experiencia': 'experiente'}]))], axis=1)
+
+# Previsão
+analista_recomendado = model.predict(novo_protocolo_features)
+print("Analista Recomendado:", analista_recomendado)
+
+
+
+
+Explicação
+Pré-processamento: O texto da manifestação é transformado em uma representação numérica usando o TF-IDF, enquanto a experiência do analista é convertida em variáveis categóricas.
+Classificação de Sentimento: O tom da reclamação é classificado como positivo, neutro ou negativo usando uma biblioteca de NLP.
+Treinamento do Modelo: O modelo de Random Forest é treinado para prever o analista com base nas features extraídas (tom da reclamação e experiência).
+Validação: O modelo é avaliado e as features mais importantes são visualizadas.
+Produção: O modelo é salvo para ser utilizado em novos protocolos.
+
+# ---------------------------------------------------------------------
+
+Para criar uma coluna que classifique o nível de insatisfação, podemos usar o valor contínuo do "compound score" gerado pela análise de sentimento da biblioteca VADER ou outra métrica de sentimento. O "compound score" varia de -1 (mais insatisfeito) a 1 (mais satisfeito). Podemos transformar esse valor em uma escala personalizada para definir o nível de insatisfação.
+
+Aqui está como podemos fazer isso:
+
+1. Adicionar uma coluna de nível de insatisfação
+# Função para classificar o nível de insatisfação com base no compound score
+def insatisfaction_level(text):
+    sentiment_score = sid.polarity_scores(text)['compound']
+    # Classificar em níveis de insatisfação
+    if sentiment_score <= -0.75:
+        return 5  # Muito Insatisfeito
+    elif -0.75 < sentiment_score <= -0.25:
+        return 4  # Insatisfeito
+    elif -0.25 < sentiment_score <= 0:
+        return 3  # Neutro tendendo a insatisfeito
+    elif 0 < sentiment_score <= 0.25:
+        return 2  # Neutro tendendo a satisfeito
+    else:
+        return 1  # Satisfeito
+
+# Aplicando a função ao DataFrame
+df['nivel_insatisfacao'] = df['Texto Manifestação'].apply(insatisfaction_level)
+
+# Visualizando a nova coluna de nível de insatisfação
+df[['Texto Manifestação', 'sentimento', 'nivel_insatisfacao']].head()
+
+
+#2. Ordenando pela insatisfação
+Agora podemos ordenar os dados com base na nova coluna nivel_insatisfacao, onde 5 significa "muito insatisfeito" e 1 significa "satisfeito".
+# Ordenando do mais insatisfeito para o mais satisfeito
+df_sorted = df.sort_values(by='nivel_insatisfacao', ascending=False)
+
+# Visualizando os dados ordenados
+df_sorted[['Texto Manifestação', 'nivel_insatisfacao']].head()
+
+Explicação
+insatisfaction_level(): Classifica o texto em uma escala de 1 a 5, onde 5 é o nível mais alto de insatisfação.
+Ordenação: Permite priorizar os protocolos mais críticos para um atendimento mais rápido e eficiente.
+Essa abordagem ajuda a dar visibilidade às reclamações mais sérias e a tratá-las com maior prioridade.
+
