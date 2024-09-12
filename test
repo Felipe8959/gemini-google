@@ -1,33 +1,29 @@
-import openai
+from transformers import BartForConditionalGeneration, BartTokenizer
 import pandas as pd
-
-# Configure sua chave de API da OpenAI
-openai.api_key = "sua_chave_de_api_aqui"
 
 # Carregue a base de dados (exemplo com um arquivo CSV)
 df = pd.read_csv('manifestacoes.csv')
 
-# Função para gerar resumo de melhorias
+# Carregue o modelo BART e o tokenizer (transforma texto em tokens para o modelo processar)
+model_name = "facebook/bart-large-cnn"
+model = BartForConditionalGeneration.from_pretrained(model_name)
+tokenizer = BartTokenizer.from_pretrained(model_name)
+
+# Função para gerar resumo
 def gerar_resumo(manifestacoes):
-    prompt = (
-        "A seguir está uma lista de reclamações de clientes sobre um banco. "
-        "Identifique os principais problemas e sugira melhorias com base nas reclamações:\n\n"
-        f"{manifestacoes}\n\n"
-        "Resuma os pontos mais críticos que precisam ser melhorados."
-    )
-
-    # Chamada para a API da OpenAI (modelo GPT)
-    response = openai.Completion.create(
-        engine="text-davinci-003",  # ou outro modelo como GPT-4
-        prompt=prompt,
-        max_tokens=200,
-        temperature=0.5
-    )
-
-    return response.choices[0].text.strip()
+    # Tokenize o texto (converte para uma sequência de números para o modelo)
+    inputs = tokenizer(manifestacoes, return_tensors="pt", max_length=1024, truncation=True)
+    
+    # Gerar o resumo
+    summary_ids = model.generate(inputs["input_ids"], num_beams=4, max_length=150, early_stopping=True)
+    
+    # Converter os tokens de volta para texto
+    resumo = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    
+    return resumo
 
 # Combine as descrições das manifestações em um único texto
-manifestacoes_texto = "\n".join(df['DESCRICAO DA MANIFESTACAO'].tolist())
+manifestacoes_texto = " ".join(df['DESCRICAO DA MANIFESTACAO'].tolist())
 
 # Gerar o resumo
 resumo = gerar_resumo(manifestacoes_texto)
