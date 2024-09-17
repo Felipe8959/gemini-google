@@ -1,33 +1,30 @@
-from transformers import BartForConditionalGeneration, BartTokenizer
-import pandas as pd
+# Emular navegador real
 
-# Carregue a base de dados (exemplo com um arquivo CSV)
-df = pd.read_csv('manifestacoes.csv')
+from selenium.webdriver.common.by import By
+from selenium.webdriver.edge.options import Options
 
-# Carregue o modelo BART e o tokenizer (transforma texto em tokens para o modelo processar)
-model_name = "facebook/bart-large-cnn"
-model = BartForConditionalGeneration.from_pretrained(model_name)
-tokenizer = BartTokenizer.from_pretrained(model_name)
+options = Options()
+options.add_argument("--disable-blink-features=AutomationControlled")
+options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36")
 
-# Função para gerar resumo
-def gerar_resumo(manifestacoes):
-    # Tokenize o texto (converte para uma sequência de números para o modelo)
-    inputs = tokenizer(manifestacoes, return_tensors="pt", max_length=1024, truncation=True)
-    
-    # Gerar o resumo
-    summary_ids = model.generate(inputs["input_ids"], num_beams=4, max_length=150, early_stopping=True)
-    
-    # Converter os tokens de volta para texto
-    resumo = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
-    
-    return resumo
+driver = webdriver.Edge(options=options)
 
-# Combine as descrições das manifestações em um único texto
-manifestacoes_texto = " ".join(df['DESCRICAO DA MANIFESTACAO'].tolist())
 
-# Gerar o resumo
-resumo = gerar_resumo(manifestacoes_texto)
+# Gerenciamento de Cookies e Sessões
 
-# Exibir o resumo
-print("Resumo dos principais pontos a melhorar:")
-print(resumo)
+# Antes de preencher o CAPTCHA
+cookies = driver.get_cookies()
+
+# Após preencher o CAPTCHA
+for cookie in cookies:
+    driver.add_cookie(cookie)
+
+
+# Utilizar Playwright (Alternativa ao Selenium):
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    browser = p.chromium.launch(headless=False)
+    page = browser.new_page()
+    page.goto("URL_DO_SITE")
+    # Continuar com a automação
