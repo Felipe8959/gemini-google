@@ -1,55 +1,65 @@
-import pandas as pd
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+# Importar bibliotecas necessárias
+from pyspark.sql.functions import udf, col
+from pyspark.sql.types import StringType, DoubleType, BooleanType
+import nltk
+from nltk.corpus import stopwords
+from textblob import TextBlob
 import re
 
-# Carregar dados
-df = pd.read_excel('sua_base.xlsx')
+# Baixar recursos necessários do NLTK (se ainda não estiverem disponíveis)
+nltk.download('punkt')
+nltk.download('stopwords')
 
-# Análise de Sentimento
-tokenizer = AutoTokenizer.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
-model = AutoModelForSequenceClassification.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
+# Lista de palavras inapropriadas (exemplo)
+palavras_inapropriadas = ['palavrão1', 'palavrão2', 'palavrão3']  # Substitua pelas palavras relevantes
 
-def analyze_sentiment(text):
-    tokens = tokenizer.encode(text, return_tensors='pt', truncation=True, max_length=512)
-    result = model(tokens)
-    sentiment = int(torch.argmax(result.logits)) + 1
-    normalized_sentiment = (sentiment - 3) / 2
-    return normalized_sentiment
+# Função de pré-processamento
+def preprocessamento(texto):
+    # Remover informações pessoais e caracteres especiais
+    texto = re.sub(r'\d+', '', texto)  # Remove números
+    texto = re.sub(r'[^\w\s]', '', texto)  # Remove pontuação
+    texto = re.sub(r'\s+', ' ', texto)  # Remove espaços extras
+    texto = texto.strip().lower()  # Remove espaços no início/fim e converte para minúsculas
+    return texto
 
-df['Sentimento'] = df['DESCRICAO DA MANIFESTACAO'].apply(analyze_sentiment)
+preprocessamento_udf = udf(preprocessamento, StringType())
 
-# Detecção de Palavras Inapropriadas
-palavras_inapropriadas = ['palavra1', 'palavra2', 'palavra3']
+# Função de análise de sentimento
+def analise_sentimento(texto):
+    blob = TextBlob(texto)
+    sentimento = blob.sentiment.polarity
+    return float(sentimento)
 
-def detect_inappropriate_words(text):
-    text = text.lower()
+analise_sentimento_udf = udf(analise_sentimento, DoubleType())
+
+# Função para detectar palavras inapropriadas
+def contem_palavras_inapropriadas(texto):
     for palavra in palavras_inapropriadas:
-        if re.search(rf'\b{palavra}\b', text):
+        if palavra in texto:
             return True
     return False
 
-df['Contém Palavras Inapropriadas'] = df['DESCRICAO DA MANIFESTACAO'].apply(detect_inappropriate_words)
+contem_palavras_inapropriadas_udf = udf(contem_palavras_inapropriadas, BooleanType())
 
-# Resumo e Sentimento
-summarizer = pipeline("summarization", model="unicamp-dl/ptt5-base-portuguese-vocab")
-
-def summarize_text(text):
-    summarized = summarizer(text, max_length=50, min_length=25, do_sample=False)
-    return summarized[0]['summary_text']
-
-df['Resumo'] = df['DESCRICAO DA MANIFESTACAO'].apply(summarize_text)
-
-def get_sentiment_label(sentiment_score):
-    if sentiment_score > 0:
-        return 'Positivo'
-    elif sentiment_score < 0:
-        return 'Negativo'
+# Função para resumir o texto
+def resumir_texto(texto):
+    sentencas = nltk.sent_tokenize(texto)
+    if len(sentencas) > 2:
+        resumo = ' '.join([sentencas[0], sentencas[-1]])
     else:
-        return 'Neutro'
+        resumo = texto
+    return resumo
 
-df['Sentimento Cliente'] = df['Sentimento'].apply(get_sentiment_label)
-df['Resumo com Sentimento'] = df.apply(lambda x: f"{x['Resumo']} (Sentimento: {x['Sentimento Cliente']})", axis=1)
+resumir_texto_udf = udf(resumir_texto, StringType())
 
-# Salvar o DataFrame atualizado
-df.to_excel('sua_base_atualizada.xlsx', index=False)
+# Aplicar as funções ao DataFrame
+df = df.withColumn('Texto_Prep', preprocessamento_udf(col('DESCRICAO DA MANIFESTACAO')))
+df = df.withColumn('Sentimento', analise_sentimento_udf(col('Texto_Prep')))
+df = df.withColumn('Contem_Palavras_Inapropriadas', contem_palavras_inapropriadas_udf(col('Texto_Prep')))
+df = df.withColumn('Resumo', resumir_texto_udf(col('Texto_Prep')))
+
+# Selecionar colunas relevantes para visualização
+df_resultado = df.select('DESCRICAO DA MANIFESTACAO', 'Sentimento', 'Contem_Palavras_Inapropriadas', 'Resumo')
+
+# Mostrar os resultados
+df_resultado.show(truncate=False)
