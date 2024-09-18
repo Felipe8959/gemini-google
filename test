@@ -1,30 +1,55 @@
-# Emular navegador real
+import pandas as pd
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline
+import re
 
-from selenium.webdriver.common.by import By
-from selenium.webdriver.edge.options import Options
+# Carregar dados
+df = pd.read_excel('sua_base.xlsx')
 
-options = Options()
-options.add_argument("--disable-blink-features=AutomationControlled")
-options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36")
+# Análise de Sentimento
+tokenizer = AutoTokenizer.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
+model = AutoModelForSequenceClassification.from_pretrained("nlptown/bert-base-multilingual-uncased-sentiment")
 
-driver = webdriver.Edge(options=options)
+def analyze_sentiment(text):
+    tokens = tokenizer.encode(text, return_tensors='pt', truncation=True, max_length=512)
+    result = model(tokens)
+    sentiment = int(torch.argmax(result.logits)) + 1
+    normalized_sentiment = (sentiment - 3) / 2
+    return normalized_sentiment
 
+df['Sentimento'] = df['DESCRICAO DA MANIFESTACAO'].apply(analyze_sentiment)
 
-# Gerenciamento de Cookies e Sessões
+# Detecção de Palavras Inapropriadas
+palavras_inapropriadas = ['palavra1', 'palavra2', 'palavra3']
 
-# Antes de preencher o CAPTCHA
-cookies = driver.get_cookies()
+def detect_inappropriate_words(text):
+    text = text.lower()
+    for palavra in palavras_inapropriadas:
+        if re.search(rf'\b{palavra}\b', text):
+            return True
+    return False
 
-# Após preencher o CAPTCHA
-for cookie in cookies:
-    driver.add_cookie(cookie)
+df['Contém Palavras Inapropriadas'] = df['DESCRICAO DA MANIFESTACAO'].apply(detect_inappropriate_words)
 
+# Resumo e Sentimento
+summarizer = pipeline("summarization", model="unicamp-dl/ptt5-base-portuguese-vocab")
 
-# Utilizar Playwright (Alternativa ao Selenium):
-from playwright.sync_api import sync_playwright
+def summarize_text(text):
+    summarized = summarizer(text, max_length=50, min_length=25, do_sample=False)
+    return summarized[0]['summary_text']
 
-with sync_playwright() as p:
-    browser = p.chromium.launch(headless=False)
-    page = browser.new_page()
-    page.goto("URL_DO_SITE")
-    # Continuar com a automação
+df['Resumo'] = df['DESCRICAO DA MANIFESTACAO'].apply(summarize_text)
+
+def get_sentiment_label(sentiment_score):
+    if sentiment_score > 0:
+        return 'Positivo'
+    elif sentiment_score < 0:
+        return 'Negativo'
+    else:
+        return 'Neutro'
+
+df['Sentimento Cliente'] = df['Sentimento'].apply(get_sentiment_label)
+df['Resumo com Sentimento'] = df.apply(lambda x: f"{x['Resumo']} (Sentimento: {x['Sentimento Cliente']})", axis=1)
+
+# Salvar o DataFrame atualizado
+df.to_excel('sua_base_atualizada.xlsx', index=False)
