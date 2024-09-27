@@ -1,21 +1,20 @@
-from sumy.parsers.plaintext import PlaintextParser
-from sumy.nlp.tokenizers import Tokenizer
-from sumy.summarizers.lsa import LsaSummarizer
+from transformers import pipeline
+
+# Carregando o pipeline de sumarização
+summarizer = pipeline("summarization")
 
 # Texto para sumarizar
 text = """
-O Python é uma linguagem de programação de alto nível, interpretada, de script e orientada a objetos com semântica dinâmica.
-Sua tipagem dinâmica e a fácil legibilidade dos seus códigos a tornam ideal para prototipagem rápida e desenvolvimento de aplicativos.
-Além disso, Python oferece módulos e pacotes, o que incentiva a modularidade e a reutilização de códigos.
+Python is a high-level, interpreted, and general-purpose programming language. 
+Its design philosophy emphasizes code readability with the use of significant indentation. 
+Python is dynamically-typed and garbage-collected. 
+It supports multiple programming paradigms, including structured (particularly procedural), object-oriented and functional programming. 
+Due to its comprehensive standard library, Python is often described as a "batteries included" language.
 """
 
-# Parser de texto
-parser = PlaintextParser.from_string(text, Tokenizer("portuguese"))
-# Escolha do sumarizador (neste caso, LSA)
-summarizer = LsaSummarizer()
-# Número de frases no resumo
-summary = summarizer(parser.document, 2)
+# Gerando o resumo
+summary = summarizer(text, max_length=50, min_length=25, do_sample=False)
 
 # Exibindo o resumo
-for sentence in summary:
-    print(sentence)
+print("Resumo:")
+print(summary[0]['summary_text'])
