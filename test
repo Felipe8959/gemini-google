@@ -1,20 +1,20 @@
 from transformers import pipeline
 
-# Carregando o pipeline de sumarização
-summarizer = pipeline("summarization")
+# Carregando o pipeline de sumarização com o modelo específico para português
+summarizer = pipeline("summarization", model="mrm8488/bert2bert_shared-portuguese-finetuned-summarization")
 
-# Texto para sumarizar
-text = """
-Python is a high-level, interpreted, and general-purpose programming language. 
-Its design philosophy emphasizes code readability with the use of significant indentation. 
-Python is dynamically-typed and garbage-collected. 
-It supports multiple programming paradigms, including structured (particularly procedural), object-oriented and functional programming. 
-Due to its comprehensive standard library, Python is often described as a "batteries included" language.
+# Texto em português para sumarizar
+texto = """
+A linguagem de programação Python é amplamente utilizada em diversos campos da tecnologia, incluindo ciência de dados, desenvolvimento web, automação de tarefas, entre outros. 
+Ela se destaca pela sua sintaxe simples e legível, o que a torna uma ótima escolha tanto para iniciantes quanto para desenvolvedores experientes. 
+Além disso, Python possui uma vasta comunidade de desenvolvedores e uma quantidade significativa de bibliotecas e frameworks que facilitam a implementação de soluções complexas. 
+Nos últimos anos, o uso de Python tem crescido significativamente devido à sua popularidade em áreas como aprendizado de máquina e análise de dados. 
+Como resultado, a demanda por profissionais que dominam essa linguagem também aumentou, tornando o aprendizado de Python uma habilidade valiosa no mercado de trabalho.
 """
 
 # Gerando o resumo
-summary = summarizer(text, max_length=50, min_length=25, do_sample=False)
+resumo = summarizer(texto, max_length=50, min_length=25, do_sample=False)
 
 # Exibindo o resumo
 print("Resumo:")
-print(summary[0]['summary_text'])
+print(resumo[0]['summary_text'])
