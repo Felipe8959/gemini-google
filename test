@@ -1,109 +1,21 @@
-import pandas as pd
-from dotenv import load_dotenv
-from langchain_community.chat_models import ChatOpenAI
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-import os
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lsa import LsaSummarizer
 
-# Carregar variáveis de ambiente
-load_dotenv()
+# Texto para sumarizar
+text = """
+O Python é uma linguagem de programação de alto nível, interpretada, de script e orientada a objetos com semântica dinâmica.
+Sua tipagem dinâmica e a fácil legibilidade dos seus códigos a tornam ideal para prototipagem rápida e desenvolvimento de aplicativos.
+Além disso, Python oferece módulos e pacotes, o que incentiva a modularidade e a reutilização de códigos.
+"""
 
-# Definir a chave da API
-api_key = os.getenv("OPENAI_API_KEY")
+# Parser de texto
+parser = PlaintextParser.from_string(text, Tokenizer("portuguese"))
+# Escolha do sumarizador (neste caso, LSA)
+summarizer = LsaSummarizer()
+# Número de frases no resumo
+summary = summarizer(parser.document, 2)
 
-# Instanciar o modelo de linguagem com a chave da API
-llm = ChatOpenAI(openai_api_key=api_key, model_name="gpt-4")
-
-# Caminho para o arquivo Excel
-arquivo = r"C:\Users\felip\Desktop\teste_ia\manifestacoes-ouvidoria.xlsx"
-
-# Carregar o arquivo Excel
-df = pd.read_excel(arquivo)
-
-# Definir os templates de prompt
-sentimento_template = PromptTemplate(
-    input_variables=["texto"],
-    template="""
-    Analise o sentimento do seguinte texto e forneça uma pontuação numérica entre -1 (muito negativo) e 1 (muito positivo).
-
-    Texto:
-    {texto}
-
-    Pontuação:
-    """
-)
-
-palavras_inapropriadas_template = PromptTemplate(
-    input_variables=["texto"],
-    template="""
-    O texto a seguir contém palavras inapropriadas? Responda apenas 'Sim' ou 'Não'.
-
-    Texto:
-    {texto}
-
-    Resposta:
-    """
-)
-
-resumo_template = PromptTemplate(
-    input_variables=["texto"],
-    template="""
-    Resuma o seguinte texto em português, fornecendo o resumo e indicando o sentimento do cliente (positivo, neutro ou negativo).
-
-    Texto:
-    {texto}
-
-    Resumo e Sentimento:
-    """
-)
-
-# Chains para cada tarefa
-sentimento_chain = LLMChain(llm=llm, prompt=sentimento_template)
-palavras_inapropriadas_chain = LLMChain(llm=llm, prompt=palavras_inapropriadas_template)
-resumo_chain = LLMChain(llm=llm, prompt=resumo_template)
-
-# Função para análise de sentimento
-def analisar_sentimento(texto):
-    resposta = sentimento_chain.invoke({"texto": texto})
-    resposta_texto = resposta["text"].strip()  # Extrair texto do dicionário
-    try:
-        score = float(resposta_texto)
-    except ValueError:
-        score = None
-    return score
-
-# Função para detecção de palavras inapropriadas
-def detectar_palavras_inapropriadas(texto):
-    resposta = palavras_inapropriadas_chain.invoke({"texto": texto})
-    resposta_texto = resposta["text"].strip()  # Extrair texto do dicionário
-    return resposta_texto.lower() == 'sim'
-
-# Função para resumir o texto e identificar o sentimento
-def resumir_texto(texto):
-    resposta = resumo_chain.invoke({"texto": texto})
-    resposta_texto = resposta["text"].strip()  # Extrair texto do dicionário
-    return resposta_texto
-
-# Criar novas colunas no DataFrame
-df['sentimento'] = None
-df['contém_palavras_inapropriadas'] = None
-df['resumo_e_sentimento'] = None
-
-# Iterar sobre cada linha do DataFrame
-for index, row in df.iterrows():
-    texto = row['DESCRICAO DA MANIFESTACAO']
-    
-    # Analisar o sentimento
-    score = analisar_sentimento(texto)
-    df.at[index, 'sentimento'] = score
-    
-    # Detectar palavras inapropriadas
-    contem_inapropriadas = detectar_palavras_inapropriadas(texto)
-    df.at[index, 'contém_palavras_inapropriadas'] = contem_inapropriadas
-    
-    # Resumir o texto e identificar o sentimento
-    resumo_sentimento = resumir_texto(texto)
-    df.at[index, 'resumo_e_sentimento'] = resumo_sentimento
-
-# Salvar o DataFrame atualizado em um novo arquivo Excel
-df.to_excel(r"C:\Users\felip\Desktop\teste_ia\manifestacoes-ouvidoria-atualizado.xlsx", index=False)
+# Exibindo o resumo
+for sentence in summary:
+    print(sentence)
