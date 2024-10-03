@@ -1,28 +1,21 @@
-from transformers import BertTokenizerFast, EncoderDecoderModel
-import torch
+Título: Projeto de Análise de Sentimentos e Sumarização de Manifestações de Clientes
 
-# Definindo o dispositivo (GPU se disponível)
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+Objetivo do Projeto:
+Facilitar o entendimento das manifestações dos clientes ao transformar grandes volumes de textos em insights claros e resumidos, permitindo ações rápidas e eficientes com base no feedback recebido.
 
-# Carregando o modelo e o tokenizer
-modelo = 'mrm8488/bert2bert_shared-spanish-finetuned-summarization'
-tokenizer = BertTokenizerFast.from_pretrained(modelo)
-model = EncoderDecoderModel.from_pretrained(modelo).to(device)
-
-# Função para gerar sumarização
-def gerar_resumo(texto):
-    inputs = tokenizer([texto], padding="max_length", truncation=True, max_length=512, return_tensors="pt")
-    input_ids = inputs.input_ids.to(device)
-    attention_mask = inputs.attention_mask.to(device)
-    output = model.generate(input_ids, attention_mask=attention_mask)
-    return tokenizer.decode(output[0], skip_special_tokens=True)
-
-# Exemplo de texto em português (pode precisar de ajustes)
-texto = """
-Python é uma linguagem de programação de alto nível, interpretada e de propósito geral. Sua filosofia de design enfatiza a legibilidade do código e usa indentação significativa. Python é dinâmico e coletado por lixo, suportando múltiplos paradigmas de programação. Possui uma grande biblioteca padrão, que inclui diversos módulos e pacotes para desenvolvimento rápido e eficiente.
-"""
-
-# Gerando o resumo
-resumo = gerar_resumo(texto)
-print("Resumo gerado:")
-print(resumo)
+1. O que fizemos?
+Análise de Sentimentos: Identificamos o tom emocional dos comentários dos clientes (positivo, neutro ou negativo). Isso nos permite entender rapidamente como os clientes se sentem em relação aos nossos produtos/serviços.
+Sumarização: Resumimos o conteúdo das manifestações de clientes, tornando possível capturar as ideias principais sem precisar ler cada texto por completo.
+2. Por que isso é importante?
+Economia de Tempo: Em vez de analisar manualmente um grande volume de feedback, agora temos um resumo das principais questões e sentimentos em torno de nossas operações.
+Decisões Mais Rápidas: Podemos identificar rapidamente áreas que precisam de atenção, como reclamações recorrentes ou oportunidades de melhoria com base em elogios.
+Foco em Ações: Com a análise de sentimentos, podemos priorizar o atendimento de reclamações mais urgentes e resolver problemas que impactam negativamente a experiência do cliente.
+3. Principais Resultados:
+Classificação de Sentimentos: Identificamos que X% das manifestações são positivas, Y% são neutras e Z% são negativas.
+Principais Reclamações: A análise destacou que os temas mais recorrentes nos feedbacks negativos são: [Principais Problemas].
+Pontos Fortes: Nos feedbacks positivos, os clientes mencionam frequentemente [Pontos Fortes do Produto/Serviço].
+4. Próximos Passos:
+Ações de Melhoria: Com base nos resultados da análise, recomendamos priorizar a solução dos problemas mais mencionados nas manifestações negativas.
+Monitoramento Contínuo: Recomendamos continuar a monitorar periodicamente as manifestações para garantir que estamos sempre respondendo rapidamente às mudanças no sentimento do cliente.
+Conclusão:
+Este projeto proporciona uma visão clara e objetiva sobre a percepção dos nossos clientes. Isso nos dá uma base sólida para tomar decisões mais informadas e melhorar a experiência dos nossos clientes, garantindo maior satisfação e lealdade
