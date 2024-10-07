@@ -1,17 +1,21 @@
-import nltk
-from nltk.corpus import wordnet as wn
 import os
+from nltk.corpus import wordnet as wn
+from nltk.data import find
 
 # Defina o caminho para o diretório onde o WordNet foi extraído
-caminho_wordnet = '/seu/caminho/para/wordnet'
+caminho_wordnet = '/seu/caminho/para/wordnet/dict'
 
 # Adiciona o caminho do WordNet aos recursos do NLTK
+if not os.path.exists(caminho_wordnet):
+    raise FileNotFoundError(f"Caminho do WordNet não encontrado: {caminho_wordnet}")
+
+# Defina o caminho manualmente para que o NLTK encontre os dados
 nltk.data.path.append(caminho_wordnet)
 
-# Verifique se você consegue acessar os dados do WordNet
-sinonimos = wn.synsets('carro')  # Exemplo de busca de sinônimos para a palavra "carro"
-print(sinonimos)
-
-# Listar as definições de cada sinônimo encontrado
-for sinonimo in sinonimos:
-    print(sinonimo.name(), sinonimo.definition())
+# Tente acessar os dados do WordNet para ver se funcionam
+try:
+    sinonimos = wn.synsets('carro')
+    for sinonimo in sinonimos:
+        print(sinonimo.name(), sinonimo.definition())
+except LookupError:
+    print("WordNet ainda não foi encontrado.")
