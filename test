@@ -1,19 +1,17 @@
+import nltk
+from nltk.corpus import wordnet as wn
 import os
 
-# Caminho para a pasta onde você extraiu os arquivos de stopwords
-caminho_stopwords = '/seu/caminho/para/stopwords'
+# Defina o caminho para o diretório onde o WordNet foi extraído
+caminho_wordnet = '/seu/caminho/para/wordnet'
 
-# Função para carregar as stopwords de um arquivo específico
-def carregar_stopwords(idioma):
-    caminho_arquivo = os.path.join(caminho_stopwords, f'{idioma}.txt')
-    if os.path.exists(caminho_arquivo):
-        with open(caminho_arquivo, 'r', encoding='utf-8') as f:
-            stopwords = f.read().splitlines()
-        return set(stopwords)
-    else:
-        raise FileNotFoundError(f"O arquivo de stopwords para o idioma '{idioma}' não foi encontrado.")
+# Adiciona o caminho do WordNet aos recursos do NLTK
+nltk.data.path.append(caminho_wordnet)
 
-# Carregar as stopwords em português
-stop_words_portugues = carregar_stopwords('portuguese')
+# Verifique se você consegue acessar os dados do WordNet
+sinonimos = wn.synsets('carro')  # Exemplo de busca de sinônimos para a palavra "carro"
+print(sinonimos)
 
-print(stop_words_portugues)
+# Listar as definições de cada sinônimo encontrado
+for sinonimo in sinonimos:
+    print(sinonimo.name(), sinonimo.definition())
