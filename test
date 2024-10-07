@@ -1,15 +1,19 @@
 import os
-from nltk.corpus import stopwords
 
-# Caminho da pasta onde você extraiu as stopwords
+# Caminho para a pasta onde você extraiu os arquivos de stopwords
 caminho_stopwords = '/seu/caminho/para/stopwords'
 
-# Adiciona o caminho ao NLTK para que ele encontre os arquivos
-if 'stopwords' not in stopwords.fileids():
-    stopwords.fileids = lambda: [f.split('.')[0] for f in os.listdir(caminho_stopwords) if f.endswith('.txt')]
-    stopwords.abspath = lambda fileid: os.path.join(caminho_stopwords, fileid + '.txt')
+# Função para carregar as stopwords de um arquivo específico
+def carregar_stopwords(idioma):
+    caminho_arquivo = os.path.join(caminho_stopwords, f'{idioma}.txt')
+    if os.path.exists(caminho_arquivo):
+        with open(caminho_arquivo, 'r', encoding='utf-8') as f:
+            stopwords = f.read().splitlines()
+        return set(stopwords)
+    else:
+        raise FileNotFoundError(f"O arquivo de stopwords para o idioma '{idioma}' não foi encontrado.")
 
-# Agora você pode usar as stopwords normalmente
-stop_words = set(stopwords.words('portuguese'))
+# Carregar as stopwords em português
+stop_words_portugues = carregar_stopwords('portuguese')
 
-print(stop_words)
+print(stop_words_portugues)
