@@ -1,8 +1,9 @@
-SELECT 
-    LENGTH(ncpf_usuar_conec_conto_receb) AS length_ncpf_usuar_conec_conto_receb,
-    LENGTH(ncnpj_empr_conto_receb) AS length_ncnpj_empr_conto_receb,
-    LENGTH(idocto_empr_conto_receb) AS length_idocto_empr_conto_receb,
-    LENGTH(idocto_usuar_conec_conto_receb) AS length_idocto_usuar_conec_conto_receb,
-    LENGTH(hcriacao_conto_receb) AS length_hcriacao_conto_receb
-FROM 
-    sua_tabela
+# Comparar colunas entre dois DataFrames
+common_columns = set(df1.columns).intersection(set(df2.columns))  # Colunas em comum
+df1_only_columns = set(df1.columns).difference(set(df2.columns))  # Colunas que estão apenas em df1
+df2_only_columns = set(df2.columns).difference(set(df1.columns))  # Colunas que estão apenas em df2
+
+# Exibir resultados
+print("Colunas em comum:", common_columns)
+print("Colunas apenas no df1:", df1_only_columns)
+print("Colunas apenas no df2:", df2_only_columns)
