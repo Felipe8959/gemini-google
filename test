@@ -1,29 +1,8 @@
-
-import pandas as pd
-
-# Carregar o arquivo Excel
-file_path = '/mnt/data/file-XQV4MsgJtjIHBsfJSPIAnn1r'
-df = pd.read_excel(file_path)
-
-# Função para padronizar o CCPF_CNPJ
-def padronizar_ccpf_cnpj(valor):
-    valor = str(valor)
-    
-    # Preenche com zeros à esquerda até completar 11 dígitos
-    if len(valor) < 11:
-        valor = valor.zfill(11)
-    
-    # Adiciona quatro zeros entre os 9 primeiros e os últimos 2 dígitos
-    if len(valor) == 11:
-        valor = valor[:9] + "0000" + valor[9:]
-    
-    return valor
-
-# Aplicar a padronização à coluna CCPF_CNPJ
-df['CCPF_CNPJ'] = df['CCPF_CNPJ'].apply(padronizar_ccpf_cnpj)
-
-# Salvar o resultado em um novo arquivo
-output_file = '/mnt/data/ccpf_cnpj_padronizado.xlsx'
-df.to_excel(output_file, index=False)
-
-output_file
+SELECT 
+    LENGTH(ncpf_usuar_conec_conto_receb) AS length_ncpf_usuar_conec_conto_receb,
+    LENGTH(ncnpj_empr_conto_receb) AS length_ncnpj_empr_conto_receb,
+    LENGTH(idocto_empr_conto_receb) AS length_idocto_empr_conto_receb,
+    LENGTH(idocto_usuar_conec_conto_receb) AS length_idocto_usuar_conec_conto_receb,
+    LENGTH(hcriacao_conto_receb) AS length_hcriacao_conto_receb
+FROM 
+    sua_tabela
