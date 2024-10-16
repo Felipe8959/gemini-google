@@ -1,9 +1,39 @@
-# Comparar colunas entre dois DataFrames
-common_columns = set(df1.columns).intersection(set(df2.columns))  # Colunas em comum
-df1_only_columns = set(df1.columns).difference(set(df2.columns))  # Colunas que estão apenas em df1
-df2_only_columns = set(df2.columns).difference(set(df1.columns))  # Colunas que estão apenas em df2
+*- Google TGIF*
 
-# Exibir resultados
-print("Colunas em comum:", common_columns)
-print("Colunas apenas no df1:", df1_only_columns)
-print("Colunas apenas no df2:", df2_only_columns)
+Discussões internas recorrentes onde a equipe compartilha atualizações e novidades sobre os projetos em andamento.
+
+
+
+*- "It's our problem"*
+
+Filosofia adotada pela empresa para incentivar a responsabilidade coletiva na resolução de problemas.
+
+
+
+*- Testar produtos internamente antes do lançamento*
+
+Prática de testar novos produtos e funcionalidades com os funcionários para identificar melhorias antes de disponibilizar ao público.
+
+
+
+*- Uso de prompts de IA no atendimento ao cliente*
+
+Implementação de inteligência artificial para aprimorar a interação com clientes, automatizando e melhorando as respostas às suas dúvidas.
+
+
+
+*- IA generativa para análise de sentimentos (risco de migração para o BACEN)*
+
+Utilização de IA para analisar e correlacionar sentimentos em interações e reclamações de clientes que podem resultar em uma reclamação ao BACEN.
+
+
+
+*- Direcionamento de protocolos baseado no tom da reclamação*
+
+Sistema de IA que ajusta a priorização e encaminhamento de reclamações conforme o tom emocional identificado nas interações.
+
+
+
+*- Coleta de dados de reclamações feitas no Google*
+
+Estratégia para reunir e analisar dados de reclamações recebidas através dos serviços do Google, com o objetivo de melhorar o atendimento e os produtos.
