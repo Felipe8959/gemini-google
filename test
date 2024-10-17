@@ -1,39 +1,38 @@
-*- Google TGIF*
+def distribuir_casos_especificos(df, analistas, filtro_coluna, filtro_valor, analista_coluna, valores_qualidade=None, situacoes=None):
+    # Se o filtro_valor não for uma lista, converta para lista
+    if not isinstance(filtro_valor, list):
+        filtro_valor = [filtro_valor]
+    
+    # Filtrar os analistas que possuem 'X' na coluna de qualidade
+    analistas_filtrados = analistas[analistas[analista_coluna].str.contains('X', case=False, na=False)]['ANALISTA'].values
 
-Discussões internas recorrentes onde a equipe compartilha atualizações e novidades sobre os projetos em andamento.
+    # Filtrar os casos que precisam ser distribuídos com base na coluna 'DISTRIBUICAO' vazia
+    df_demandas_distribuir = df[(df['DISTRIBUICAO'].isnull()) | (df['DISTRIBUICAO'] == "")]
 
+    # Obter os índices dos casos que atendem aos filtros específicos (juncao e situacao)
+    indices = df_demandas_distribuir[
+        (df_demandas_distribuir[filtro_coluna].isin(filtro_valor)) &
+        (df_demandas_distribuir['SITUACAO DA MANIFESTACAO'].isin(situacoes))
+    ].index
 
+    # Distribuir os casos específicos entre os analistas filtrados
+    for i, idx in enumerate(indices):
+        df.at[idx, 'DISTRIBUICAO'] = analistas_filtrados[i % len(analistas_filtrados)]
 
-*- "It's our problem"*
-
-Filosofia adotada pela empresa para incentivar a responsabilidade coletiva na resolução de problemas.
-
-
-
-*- Testar produtos internamente antes do lançamento*
-
-Prática de testar novos produtos e funcionalidades com os funcionários para identificar melhorias antes de disponibilizar ao público.
-
-
-
-*- Uso de prompts de IA no atendimento ao cliente*
-
-Implementação de inteligência artificial para aprimorar a interação com clientes, automatizando e melhorando as respostas às suas dúvidas.
-
-
-
-*- IA generativa para análise de sentimentos (risco de migração para o BACEN)*
-
-Utilização de IA para analisar e correlacionar sentimentos em interações e reclamações de clientes que podem resultar em uma reclamação ao BACEN.
+    return df
 
 
 
-*- Direcionamento de protocolos baseado no tom da reclamação*
+# Supondo que df_analistas já está carregado com os dados do arquivo 'ANALISTAS.xlsx'
+df_analistas = pd.read_excel('PARAMETROS/ANALISTAS.xlsx')
 
-Sistema de IA que ajusta a priorização e encaminhamento de reclamações conforme o tom emocional identificado nas interações.
-
-
-
-*- Coleta de dados de reclamações feitas no Google*
-
-Estratégia para reunir e analisar dados de reclamações recebidas através dos serviços do Google, com o objetivo de melhorar o atendimento e os produtos.
+# Chamando a função com os dados específicos
+df_base_cruzamento_enriq = distribuir_casos_especificos(
+    df_base_cruzamento_enriq,
+    df_analistas,
+    'JUNCAO RESPONSAVEL', 
+    juncoes_qualidade,
+    'ANALISTAS QUALIDADE', 
+    valores_qualidade=juncoes_qualidade, 
+    situacoes=casos_analistas_qualidade
+)
