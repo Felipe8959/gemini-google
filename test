@@ -1,38 +1,20 @@
-def distribuir_casos_especificos(df, analistas, filtro_coluna, filtro_valor, analista_coluna, valores_qualidade=None, situacoes=None):
-    # Se o filtro_valor não for uma lista, converta para lista
-    if not isinstance(filtro_valor, list):
-        filtro_valor = [filtro_valor]
-    
-    # Filtrar os analistas que possuem 'X' na coluna de qualidade
-    analistas_filtrados = analistas[analistas[analista_coluna].str.contains('X', case=False, na=False)]['ANALISTA'].values
+def obter_historico_distribuicao():
+    global df_base_cruzamento_enriq
+    '''Função que consulta os analistas responsáveis por cada tema:'''
+    if os.path.isfile("BASE_GERAL_DISTRIBUICAO.xlsx"):
+        df_historico_demandas = pd.read_excel(
+            "BASE_GERAL_DISTRIBUICAO.xlsx", engine="openpyxl", dtype=object
+        )
+        df_historico_demandas = df_historico_demandas[['PROTOCOLO', 'ANALISTAS']]
 
-    # Filtrar os casos que precisam ser distribuídos com base na coluna 'DISTRIBUICAO' vazia
-    df_demandas_distribuir = df[(df['DISTRIBUICAO'].isnull()) | (df['DISTRIBUICAO'] == "")]
+        # Remover 'NÃO DISTRIBUIR' e 'QUALIDADE' da coluna 'ANALISTAS'
+        df_historico_demandas['ANALISTAS'] = df_historico_demandas['ANALISTAS'].replace(
+            ['NÃO DISTRIBUIR', 'QUALIDADE'], "")
 
-    # Obter os índices dos casos que atendem aos filtros específicos (juncao e situacao)
-    indices = df_demandas_distribuir[
-        (df_demandas_distribuir[filtro_coluna].isin(filtro_valor)) &
-        (df_demandas_distribuir['SITUACAO DA MANIFESTACAO'].isin(situacoes))
-    ].index
+        df_base_cruzamento_enriq = pd.merge(
+            df_relatorio_operacional, df_historico_demandas, on="PROTOCOLO", how="left"
+        )
+    else:
+        df_base_cruzamento_enriq = df_relatorio_operacional
 
-    # Distribuir os casos específicos entre os analistas filtrados
-    for i, idx in enumerate(indices):
-        df.at[idx, 'DISTRIBUICAO'] = analistas_filtrados[i % len(analistas_filtrados)]
-
-    return df
-
-
-
-# Supondo que df_analistas já está carregado com os dados do arquivo 'ANALISTAS.xlsx'
-df_analistas = pd.read_excel('PARAMETROS/ANALISTAS.xlsx')
-
-# Chamando a função com os dados específicos
-df_base_cruzamento_enriq = distribuir_casos_especificos(
-    df_base_cruzamento_enriq,
-    df_analistas,
-    'JUNCAO RESPONSAVEL', 
-    juncoes_qualidade,
-    'ANALISTAS QUALIDADE', 
-    valores_qualidade=juncoes_qualidade, 
-    situacoes=casos_analistas_qualidade
-)
+    df_base_cruzamento_enriq = df_base_cruzamento_enriq.drop_duplicates(subset="PROTOCOLO")
