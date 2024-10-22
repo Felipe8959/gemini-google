@@ -1,20 +1,37 @@
-def obter_historico_distribuicao():
-    global df_base_cruzamento_enriq
-    '''Função que consulta os analistas responsáveis por cada tema:'''
-    if os.path.isfile("BASE_GERAL_DISTRIBUICAO.xlsx"):
-        df_historico_demandas = pd.read_excel(
-            "BASE_GERAL_DISTRIBUICAO.xlsx", engine="openpyxl", dtype=object
-        )
-        df_historico_demandas = df_historico_demandas[['PROTOCOLO', 'ANALISTAS']]
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+import time
 
-        # Remover 'NÃO DISTRIBUIR' e 'QUALIDADE' da coluna 'ANALISTAS'
-        df_historico_demandas['ANALISTAS'] = df_historico_demandas['ANALISTAS'].replace(
-            ['NÃO DISTRIBUIR', 'QUALIDADE'], "")
+# Inicializa o navegador
+driver = webdriver.Chrome()
 
-        df_base_cruzamento_enriq = pd.merge(
-            df_relatorio_operacional, df_historico_demandas, on="PROTOCOLO", how="left"
-        )
-    else:
-        df_base_cruzamento_enriq = df_relatorio_operacional
+# Abre a página inicial
+driver.get('URL_DA_SUA_PAGINA')
 
-    df_base_cruzamento_enriq = df_base_cruzamento_enriq.drop_duplicates(subset="PROTOCOLO")
+# Guarda o identificador da janela original
+janela_original = driver.current_window_handle
+
+# Encontra e clica no botão que abre a nova janela
+botao = driver.find_element(By.ID, 'ID_DO_BOTAO')
+botao.click()
+
+# Espera um momento para garantir que a nova janela foi aberta
+time.sleep(2)
+
+# Obtém todos os identificadores de janela
+janelas = driver.window_handles
+
+# Alterna para a nova janela
+for janela in janelas:
+    if janela != janela_original:
+        driver.switch_to.window(janela)
+        break
+
+# A partir daqui, você pode realizar as interações na nova janela
+# Por exemplo, confirmar a impressão, realizar verificações, etc.
+
+# Se precisar voltar para a janela original depois de finalizar as interações:
+driver.switch_to.window(janela_original)
+
+# Continue a automação ou finalize
+driver.quit()
