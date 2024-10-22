@@ -1,37 +1,28 @@
 from selenium import webdriver
-from selenium.webdriver.common.by import By
-import time
+from selenium.webdriver.edge.options import Options
+import os
 
-# Inicializa o navegador
-driver = webdriver.Chrome()
+# Configurar as opções do Edge
+edge_options = Options()
 
-# Abre a página inicial
+# Configurações para imprimir diretamente em PDF
+edge_options.add_experimental_option("prefs", {
+    "printing.print_preview_sticky_settings.appState": '{"recentDestinations":[{"id":"Save as PDF","origin":"local","account":"account"}],"selectedDestinationId":"Save as PDF","version":2}',
+    "savefile.default_directory": os.getcwd(),  # Diretório de salvamento
+    "savefile.overwrite_existing_file": True,
+    "printing.default_destination_selection_rules": {
+        "kind": "local",
+        "namePattern": "Save as PDF"
+    }
+})
+edge_options.add_argument("--kiosk-printing")  # Imprimir automaticamente
+
+# Inicializa o driver com as opções
+driver = webdriver.Edge(options=edge_options)
+
+# Acessa a página e clica no botão de imprimir
 driver.get('URL_DA_SUA_PAGINA')
-
-# Guarda o identificador da janela original
-janela_original = driver.current_window_handle
-
-# Encontra e clica no botão que abre a nova janela
 botao = driver.find_element(By.ID, 'ID_DO_BOTAO')
 botao.click()
 
-# Espera um momento para garantir que a nova janela foi aberta
-time.sleep(2)
-
-# Obtém todos os identificadores de janela
-janelas = driver.window_handles
-
-# Alterna para a nova janela
-for janela in janelas:
-    if janela != janela_original:
-        driver.switch_to.window(janela)
-        break
-
-# A partir daqui, você pode realizar as interações na nova janela
-# Por exemplo, confirmar a impressão, realizar verificações, etc.
-
-# Se precisar voltar para a janela original depois de finalizar as interações:
-driver.switch_to.window(janela_original)
-
-# Continue a automação ou finalize
-driver.quit()
+# A impressão deve ser salva automaticamente como PDF
