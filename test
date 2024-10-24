@@ -1,16 +1,18 @@
-from pyspark.sql.functions import explode, col
+from pyspark.sql.functions import collect_list, array_distinct
 
-# Explodir os tokens para criar uma lista única de palavras
-tokens_exploded = df_filtered_cliente.select(explode(col("filtered_cliente")).alias("word"))
+# Coletar todas as palavras em uma lista e manter apenas palavras únicas
+vocab_df = tokens_exploded.select("word").distinct()
 
-# Criar o vocabulário único (conjunto de palavras)
-vocabulario = tokens_exploded.distinct().rdd.flatMap(lambda x: x).collect()
+# Coletar a lista de palavras do vocabulário
+vocabulario = vocab_df.select(collect_list("word")).first()[0]
+
+# Criar um dicionário de vocabulário
 vocabulario_dict = {word: idx for idx, word in enumerate(vocabulario)}
 
 
 
+
 import numpy as np
-from pyspark.sql.functions import udf
 from pyspark.sql.types import ArrayType, IntegerType
 
 # UDF para criar vetores de contagem
