@@ -1,17 +1,29 @@
-import re
-from pyspark.sql.functions import udf
-from pyspark.sql.types import StringType
+from pyspark.sql.functions import explode, col
 
-# Função para remover caracteres especiais
-def remove_special_characters(text):
-    # Utiliza regex para remover caracteres especiais, mantendo letras, números e espaços
-    return re.sub(r'[^A-Za-z0-9áàãâéêíóôõúç ]+', '', text)
+# Explodir os tokens para criar uma lista única de palavras
+tokens_exploded = df_filtered_cliente.select(explode(col("filtered_cliente")).alias("word"))
+
+# Criar o vocabulário único (conjunto de palavras)
+vocabulario = tokens_exploded.distinct().rdd.flatMap(lambda x: x).collect()
+vocabulario_dict = {word: idx for idx, word in enumerate(vocabulario)}
+
+
+
+import numpy as np
+from pyspark.sql.functions import udf
+from pyspark.sql.types import ArrayType, IntegerType
+
+# UDF para criar vetores de contagem
+def count_vectorizer(tokens):
+    vector = np.zeros(len(vocabulario), dtype=int)
+    for token in tokens:
+        if token in vocabulario_dict:
+            vector[vocabulario_dict[token]] += 1
+    return vector.tolist()
 
 # Registrando a UDF
-remove_special_characters_udf = udf(remove_special_characters, StringType())
+count_vectorizer_udf = udf(count_vectorizer, ArrayType(IntegerType()))
 
-# Aplicando a UDF ao DataFrame
-df_cleaned = df.withColumn("cleaned_text", remove_special_characters_udf(col("texto_cliente")))
-
-# Mostrando o DataFrame com texto limpo
-df_cleaned.show(truncate=False)
+# Aplicando a UDF para criar a coluna 'vector_cliente'
+df_vector_cliente = df_filtered_cliente.withColumn("vector_cliente", count_vectorizer_udf(col("filtered_cliente")))
+df_vector_cliente.show(truncate=False)
