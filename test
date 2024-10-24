@@ -1,32 +1,17 @@
-from pyspark.sql.functions import udf, col
-from pyspark.sql.types import ArrayType, StringType
+import re
+from pyspark.sql.functions import udf
+from pyspark.sql.types import StringType
 
-# Lista de stop words em português (você pode adicionar mais palavras à lista)
-stop_words = [
-    "de", "a", "o", "que", "e", "do", "da", "em", "um", "para", 
-    "é", "com", "não", "uma", "os", "no", "se", "na", "por", 
-    "mais", "as", "dos", "como", "mas", "foi", "ao", "ele", 
-    "das", "tem", "à", "seu", "sua", "ou", "ser", "quando", 
-    "muito", "há", "nos", "já", "está", "eu", "também", 
-    "só", "pelo", "pela", "até", "isso", "ela", "entre", 
-    "depois", "sem", "mesmo", "aos", "seus", "quem", "nas", 
-    "me", "esse", "eles", "estão", "você", "tinha", "foram", 
-    "essa", "num", "nem", "suas", "meu", "às", "minha", 
-    "numa", "pelos", "elas", "qual", "nós", "lhe", "deles", 
-    "essas", "esses", "pelas", "este", "dele", "tu", "te", 
-    "vocês", "vos", "lhes", "meus", "minhas", "teu", "tua", 
-    "teus", "tuas", "nosso", "nossa", "nossos", "nossas", 
-    "dela", "delas", "esta", "estes", "estas", "aquele", 
-    "aquela", "aqueles", "aquelas", "isto", "aquilo"
-]
-
-# Função UDF para remover stop words
-def remove_stop_words(tokens):
-    return [token for token in tokens if token.lower() not in stop_words]
+# Função para remover caracteres especiais
+def remove_special_characters(text):
+    # Utiliza regex para remover caracteres especiais, mantendo letras, números e espaços
+    return re.sub(r'[^A-Za-z0-9áàãâéêíóôõúç ]+', '', text)
 
 # Registrando a UDF
-remove_stop_words_udf = udf(remove_stop_words, ArrayType(StringType()))
+remove_special_characters_udf = udf(remove_special_characters, StringType())
 
-# Aplicando a UDF para criar a coluna 'filtered_cliente'
-df_filtered_cliente = df_tokens_cliente.withColumn("filtered_cliente", remove_stop_words_udf(col("tokens_cliente")))
-df_filtered_cliente.show(truncate=False)
+# Aplicando a UDF ao DataFrame
+df_cleaned = df.withColumn("cleaned_text", remove_special_characters_udf(col("texto_cliente")))
+
+# Mostrando o DataFrame com texto limpo
+df_cleaned.show(truncate=False)
