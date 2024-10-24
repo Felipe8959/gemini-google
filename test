@@ -1,56 +1,13 @@
-from pyspark.sql import SparkSession
-from pyspark.ml.feature import Tokenizer, StopWordsRemover, CountVectorizer, IDF, StringIndexer, VectorAssembler
-from pyspark.ml.classification import LogisticRegression
-from pyspark.ml import Pipeline
-from pyspark.ml.evaluation import MulticlassClassificationEvaluator
+from pyspark.sql.functions import udf
+from pyspark.sql.types import ArrayType, StringType
 
-# Supondo que 'df' é o DataFrame carregado com as colunas 'texto_cliente', 'resposta_analista' e 'ANALISE_RESPOSTA'
+# Definindo uma UDF para tokenização simples
+def tokenize_text(text):
+    return text.split()
 
-# Pré-processamento do texto do cliente
-tokenizer_cliente = Tokenizer(inputCol="texto_cliente", outputCol="tokens_cliente")
-remover_cliente = StopWordsRemover(inputCol="tokens_cliente", outputCol="filtered_cliente")
-vectorizer_cliente = CountVectorizer(inputCol="filtered_cliente", outputCol="vector_cliente")
+# Registrando a UDF
+tokenize_udf = udf(tokenize_text, ArrayType(StringType()))
 
-# Pré-processamento do texto do analista
-tokenizer_analista = Tokenizer(inputCol="resposta_analista", outputCol="tokens_analista")
-remover_analista = StopWordsRemover(inputCol="tokens_analista", outputCol="filtered_analista")
-vectorizer_analista = CountVectorizer(inputCol="filtered_analista", outputCol="vector_analista")
-
-# Indexação da coluna target
-label_indexer = StringIndexer(inputCol="ANALISE_RESPOSTA", outputCol="label")
-
-# Combinação das features
-assembler = VectorAssembler(inputCols=["vector_cliente", "vector_analista"], outputCol="features")
-
-# Modelo de classificação
-classifier = LogisticRegression(featuresCol="features", labelCol="label")
-
-# Pipeline
-pipeline = Pipeline(stages=[
-    tokenizer_cliente,
-    remover_cliente,
-    vectorizer_cliente,
-    tokenizer_analista,
-    remover_analista,
-    vectorizer_analista,
-    assembler,
-    label_indexer,
-    classifier
-])
-
-# Divisão dos dados
-train_data, test_data = df.randomSplit([0.8, 0.2], seed=42)
-
-# Treinamento do modelo
-model = pipeline.fit(train_data)
-
-# Previsões no conjunto de teste
-predictions = model.transform(test_data)
-
-# Avaliação do modelo
-evaluator = MulticlassClassificationEvaluator(labelCol="label", predictionCol="prediction", metricName="accuracy")
-accuracy = evaluator.evaluate(predictions)
-print(f"Acurácia do modelo: {accuracy:.2f}")
-
-# Exibição da matriz de confusão
-predictions.groupBy('label', 'prediction').count().show()
+# Aplicando a UDF para criar a coluna 'tokens_cliente'
+df_tokens_cliente = df.withColumn("tokens_cliente", tokenize_udf(df["texto_cliente"]))
+df_tokens_cliente.show()
