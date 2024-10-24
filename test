@@ -1,13 +1,32 @@
-from pyspark.sql.functions import udf
+from pyspark.sql.functions import udf, col
 from pyspark.sql.types import ArrayType, StringType
 
-# Definindo uma UDF para tokenização simples
-def tokenize_text(text):
-    return text.split()
+# Lista de stop words em português (você pode adicionar mais palavras à lista)
+stop_words = [
+    "de", "a", "o", "que", "e", "do", "da", "em", "um", "para", 
+    "é", "com", "não", "uma", "os", "no", "se", "na", "por", 
+    "mais", "as", "dos", "como", "mas", "foi", "ao", "ele", 
+    "das", "tem", "à", "seu", "sua", "ou", "ser", "quando", 
+    "muito", "há", "nos", "já", "está", "eu", "também", 
+    "só", "pelo", "pela", "até", "isso", "ela", "entre", 
+    "depois", "sem", "mesmo", "aos", "seus", "quem", "nas", 
+    "me", "esse", "eles", "estão", "você", "tinha", "foram", 
+    "essa", "num", "nem", "suas", "meu", "às", "minha", 
+    "numa", "pelos", "elas", "qual", "nós", "lhe", "deles", 
+    "essas", "esses", "pelas", "este", "dele", "tu", "te", 
+    "vocês", "vos", "lhes", "meus", "minhas", "teu", "tua", 
+    "teus", "tuas", "nosso", "nossa", "nossos", "nossas", 
+    "dela", "delas", "esta", "estes", "estas", "aquele", 
+    "aquela", "aqueles", "aquelas", "isto", "aquilo"
+]
+
+# Função UDF para remover stop words
+def remove_stop_words(tokens):
+    return [token for token in tokens if token.lower() not in stop_words]
 
 # Registrando a UDF
-tokenize_udf = udf(tokenize_text, ArrayType(StringType()))
+remove_stop_words_udf = udf(remove_stop_words, ArrayType(StringType()))
 
-# Aplicando a UDF para criar a coluna 'tokens_cliente'
-df_tokens_cliente = df.withColumn("tokens_cliente", tokenize_udf(df["texto_cliente"]))
-df_tokens_cliente.show()
+# Aplicando a UDF para criar a coluna 'filtered_cliente'
+df_filtered_cliente = df_tokens_cliente.withColumn("filtered_cliente", remove_stop_words_udf(col("tokens_cliente")))
+df_filtered_cliente.show(truncate=False)
