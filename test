@@ -1,25 +1,27 @@
-from pyspark.sql.functions import col, dense_rank
-from pyspark.sql.window import Window
+from pyspark.sql.functions import udf, array
+from pyspark.sql.types import ArrayType, FloatType
 
-# Criar um DataFrame com categorias únicas e ordená-las por frequência
-category_freq = df.groupBy("ANALISE_RESPOSTA").count().orderBy(col("count").desc())
+# UDF para combinar colunas de recursos em um vetor
+def combine_features(*cols):
+    return [float(x) for x in cols]
 
-# Adicionar índices às categorias usando dense_rank
-category_freq = category_freq.withColumn("ANALISE_RESPOSTA_INDEX", dense_rank().over(Window.orderBy(col("count").desc())) - 1)
+# Registrando a UDF
+combine_features_udf = udf(combine_features, ArrayType(FloatType()))
 
-# Criar um dicionário de mapeamento
-category_mapping = {row['ANALISE_RESPOSTA']: row['ANALISE_RESPOSTA_INDEX'] for row in category_freq.collect()}
+# Suponha que você tenha um DataFrame com múltiplas colunas de recursos
+df = spark.createDataFrame(
+    [(0, 1.0, 3.0, 7.0), (1, 2.0, 5.0, 8.0), (2, 4.0, 6.0, 9.0)],
+    ["id", "feature1", "feature2", "feature3"]
+)
 
-# Aplicar o mapeamento no DataFrame original
-from pyspark.sql.functions import udf
-from pyspark.sql.types import IntegerType
+# Usando a UDF para criar a coluna 'features'
+df_combined = df.withColumn("features", combine_features_udf("feature1", "feature2", "feature3"))
 
-# UDF para mapear categorias
-def map_categories(category):
-    return category_mapping.get(category, -1)  # Retorna -1 se a categoria não for encontrada
+df_combined.show(truncate=False)
 
-map_categories_udf = udf(map_categories, IntegerType())
 
-# Criar a coluna de índice de resposta
-df_indexed = df.withColumn("ANALISE_RESPOSTA_INDEX", map_categories_udf(col("ANALISE_RESPOSTA")))
-df_indexed.show(truncate=False)
+
+# Usando a função array para combinar colunas em um vetor
+df_combined = df.withColumn("features", array("feature1", "feature2", "feature3"))
+
+df_combined.show(truncate=False)
