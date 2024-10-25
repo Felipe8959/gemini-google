@@ -1,27 +1,66 @@
-from pyspark.sql.functions import udf, array
-from pyspark.sql.types import ArrayType, FloatType
+from sklearn.model_selection import train_test_split
 
-# UDF para combinar colunas de recursos em um vetor
-def combine_features(*cols):
-    return [float(x) for x in cols]
+# Definindo as features e o target
+X = df['texto_junto']
+y = df['ANALISE_RESPOSTA_CLASSIFICACAO']  # Substitua pelo nome real da coluna alvo
 
-# Registrando a UDF
-combine_features_udf = udf(combine_features, ArrayType(FloatType()))
+# Dividindo os dados (por exemplo, 80% treino e 20% teste)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# Suponha que você tenha um DataFrame com múltiplas colunas de recursos
-df = spark.createDataFrame(
-    [(0, 1.0, 3.0, 7.0), (1, 2.0, 5.0, 8.0), (2, 4.0, 6.0, 9.0)],
-    ["id", "feature1", "feature2", "feature3"]
-)
-
-# Usando a UDF para criar a coluna 'features'
-df_combined = df.withColumn("features", combine_features_udf("feature1", "feature2", "feature3"))
-
-df_combined.show(truncate=False)
+print(f'Tamanho do conjunto de treino: {X_train.shape[0]}')
+print(f'Tamanho do conjunto de teste: {X_test.shape[0]}')
 
 
 
-# Usando a função array para combinar colunas em um vetor
-df_combined = df.withColumn("features", array("feature1", "feature2", "feature3"))
 
-df_combined.show(truncate=False)
+from sklearn.feature_extraction.text import CountVectorizer
+
+# Inicializando o CountVectorizer
+vectorizer = CountVectorizer()
+
+# Ajustando o vetor no conjunto de treino e transformando
+X_train_vect = vectorizer.fit_transform(X_train)
+
+# Transformando o conjunto de teste
+X_test_vect = vectorizer.transform(X_test)
+
+print(f'Número de características: {X_train_vect.shape[1]}')
+
+
+
+
+from sklearn.naive_bayes import MultinomialNB
+
+# Inicializando o classificador
+nb_classifier = MultinomialNB()
+
+# Treinando o modelo
+nb_classifier.fit(X_train_vect, y_train)
+
+print('Modelo treinado com sucesso!')
+
+
+
+
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Fazendo previsões no conjunto de teste
+y_pred = nb_classifier.predict(X_test_vect)
+
+# Calculando a acurácia
+accuracy = accuracy_score(y_test, y_pred)
+print(f'Acurácia: {accuracy:.2f}')
+
+# Relatório de Classificação
+print('Relatório de Classificação:')
+print(classification_report(y_test, y_pred))
+
+# Matriz de Confusão
+cm = confusion_matrix(y_test, y_pred, labels=nb_classifier.classes_)
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=nb_classifier.classes_, yticklabels=nb_classifier.classes_)
+plt.ylabel('Verdadeiro')
+plt.xlabel('Predito')
+plt.title('Matriz de Confusão')
+plt.show()
