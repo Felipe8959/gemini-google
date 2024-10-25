@@ -1,63 +1,40 @@
-from sklearn.model_selection import train_test_split
-
-# Definindo as features e o target
-X = df['texto_junto']
-y = df['ANALISE_RESPOSTA_CLASSIFICACAO']  # Substitua pelo nome real da coluna alvo
-
-# Dividindo os dados (por exemplo, 80% treino e 20% teste)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
-
-print(f'Tamanho do conjunto de treino: {X_train.shape[0]}')
-print(f'Tamanho do conjunto de teste: {X_test.shape[0]}')
-
-
-
-
-from sklearn.feature_extraction.text import CountVectorizer
-
-# Inicializando o CountVectorizer
-vectorizer = CountVectorizer()
-
-# Ajustando o vetor no conjunto de treino e transformando
-X_train_vect = vectorizer.fit_transform(X_train)
-
-# Transformando o conjunto de teste
-X_test_vect = vectorizer.transform(X_test)
-
-print(f'Número de características: {X_train_vect.shape[1]}')
-
-
-
-
+from imblearn.over_sampling import SMOTE
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-
-# Inicializando o classificador
-nb_classifier = MultinomialNB()
-
-# Treinando o modelo
-nb_classifier.fit(X_train_vect, y_train)
-
-print('Modelo treinado com sucesso!')
-
-
-
-
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.model_selection import train_test_split
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-# Fazendo previsões no conjunto de teste
-y_pred = nb_classifier.predict(X_test_vect)
+# 1. Vetorização com TF-IDF
+tfidf_vectorizer = TfidfVectorizer()
+X_tfidf = tfidf_vectorizer.fit_transform(df['texto_junto'])
 
-# Calculando a acurácia
+# 2. Dividir os dados em treino e teste
+X_train, X_test, y_train, y_test = train_test_split(
+    X_tfidf, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# 3. Aplicar oversampling no conjunto de treino
+smote = SMOTE(random_state=42)
+X_train_bal, y_train_bal = smote.fit_resample(X_train, y_train)
+
+# 4. Treinar o modelo Naive Bayes
+nb_classifier = MultinomialNB()
+nb_classifier.fit(X_train_bal, y_train_bal)
+
+# 5. Prever e avaliar o modelo
+y_pred = nb_classifier.predict(X_test)
+
+# Acurácia
 accuracy = accuracy_score(y_test, y_pred)
 print(f'Acurácia: {accuracy:.2f}')
 
-# Relatório de Classificação
+# Relatório de classificação
 print('Relatório de Classificação:')
 print(classification_report(y_test, y_pred))
 
-# Matriz de Confusão
+# Matriz de confusão
 cm = confusion_matrix(y_test, y_pred, labels=nb_classifier.classes_)
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=nb_classifier.classes_, yticklabels=nb_classifier.classes_)
 plt.ylabel('Verdadeiro')
