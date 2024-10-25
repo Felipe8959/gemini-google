@@ -2,66 +2,16 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# Verificar se o botão está presente na página
-btn_mes_ano = WebDriverWait(driver, 20).until(
-    EC.presence_of_element_located((By.ID, 'btn-mensal'))
+# Aguardar até que o container esteja visível
+container = WebDriverWait(driver, 20).until(
+    EC.visibility_of_element_located((By.CLASS_NAME, 'btn-group'))
 )
 
-# Tentar rolar para o elemento e depois clicar
-driver.execute_script("arguments[0].scrollIntoView();", btn_mes_ano)
+# Rolar até o container para garantir a visibilidade
+driver.execute_script("arguments[0].scrollIntoView();", container)
 
-# Esperar o botão estar clicável
+# Agora localizar e clicar no botão "Mes/Ano" dentro do container
 btn_mes_ano = WebDriverWait(driver, 20).until(
     EC.element_to_be_clickable((By.ID, 'btn-mensal'))
 )
 btn_mes_ano.click()
-
-
-
-
-
-
-
-from imblearn.over_sampling import SMOTE
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
-from sklearn.model_selection import train_test_split
-import seaborn as sns
-import matplotlib.pyplot as plt
-
-# 1. Vetorização com TF-IDF
-tfidf_vectorizer = TfidfVectorizer()
-X_tfidf = tfidf_vectorizer.fit_transform(df['texto_junto'])
-
-# 2. Dividir os dados em treino e teste
-X_train, X_test, y_train, y_test = train_test_split(
-    X_tfidf, y, test_size=0.2, random_state=42, stratify=y
-)
-
-# 3. Aplicar oversampling no conjunto de treino
-smote = SMOTE(random_state=42)
-X_train_bal, y_train_bal = smote.fit_resample(X_train, y_train)
-
-# 4. Treinar o modelo Naive Bayes
-nb_classifier = MultinomialNB()
-nb_classifier.fit(X_train_bal, y_train_bal)
-
-# 5. Prever e avaliar o modelo
-y_pred = nb_classifier.predict(X_test)
-
-# Acurácia
-accuracy = accuracy_score(y_test, y_pred)
-print(f'Acurácia: {accuracy:.2f}')
-
-# Relatório de classificação
-print('Relatório de Classificação:')
-print(classification_report(y_test, y_pred))
-
-# Matriz de confusão
-cm = confusion_matrix(y_test, y_pred, labels=nb_classifier.classes_)
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=nb_classifier.classes_, yticklabels=nb_classifier.classes_)
-plt.ylabel('Verdadeiro')
-plt.xlabel('Predito')
-plt.title('Matriz de Confusão')
-plt.show()
