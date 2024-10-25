@@ -1,3 +1,27 @@
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+
+# Verificar se o botão está presente na página
+btn_mes_ano = WebDriverWait(driver, 20).until(
+    EC.presence_of_element_located((By.ID, 'btn-mensal'))
+)
+
+# Tentar rolar para o elemento e depois clicar
+driver.execute_script("arguments[0].scrollIntoView();", btn_mes_ano)
+
+# Esperar o botão estar clicável
+btn_mes_ano = WebDriverWait(driver, 20).until(
+    EC.element_to_be_clickable((By.ID, 'btn-mensal'))
+)
+btn_mes_ano.click()
+
+
+
+
+
+
+
 from imblearn.over_sampling import SMOTE
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
