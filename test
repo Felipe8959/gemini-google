@@ -1,17 +1,21 @@
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+import pandas as pd
 
-# Aguardar até que o container esteja visível
-container = WebDriverWait(driver, 20).until(
-    EC.visibility_of_element_located((By.CLASS_NAME, 'btn-group'))
-)
+def colunas_valores_unicos_tabela(df):
+    dados = {'Coluna': [], 'Valores Únicos': []}
+    for coluna in df.columns:
+        valores_unicos = df[coluna].unique()
+        dados['Coluna'].append(coluna)
+        dados['Valores Únicos'].append(", ".join(map(str, valores_unicos)))
+    
+    df_valores_unicos = pd.DataFrame(dados)
+    return df_valores_unicos
 
-# Rolar até o container para garantir a visibilidade
-driver.execute_script("arguments[0].scrollIntoView();", container)
+# Exemplo de uso
+df = pd.DataFrame({
+    'Nome': ['Ana', 'Bruno', 'Carlos', 'Ana'],
+    'Idade': [25, 30, 22, 25],
+    'Cidade': ['São Paulo', 'Rio de Janeiro', 'São Paulo', 'Curitiba']
+})
 
-# Agora localizar e clicar no botão "Mes/Ano" dentro do container
-btn_mes_ano = WebDriverWait(driver, 20).until(
-    EC.element_to_be_clickable((By.ID, 'btn-mensal'))
-)
-btn_mes_ano.click()
+df_valores_unicos = colunas_valores_unicos_tabela(df)
+df_valores_unicos
