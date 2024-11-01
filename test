@@ -1,21 +1,41 @@
+import openai
 import pandas as pd
 
-def colunas_valores_unicos_tabela(df):
-    dados = {'Coluna': [], 'Valores Únicos': []}
-    for coluna in df.columns:
-        valores_unicos = df[coluna].unique()
-        dados['Coluna'].append(coluna)
-        dados['Valores Únicos'].append(", ".join(map(str, valores_unicos)))
-    
-    df_valores_unicos = pd.DataFrame(dados)
-    return df_valores_unicos
+# Configure sua chave da API
+openai.api_key = "SUA_CHAVE_API_AQUI"
 
-# Exemplo de uso
-df = pd.DataFrame({
-    'Nome': ['Ana', 'Bruno', 'Carlos', 'Ana'],
-    'Idade': [25, 30, 22, 25],
-    'Cidade': ['São Paulo', 'Rio de Janeiro', 'São Paulo', 'Curitiba']
-})
+# Carregue sua base de dados
+file_path = "caminho/para/sua/base_fic.xlsx"
+data = pd.read_excel(file_path)
 
-df_valores_unicos = colunas_valores_unicos_tabela(df)
-df_valores_unicos
+# Exemplos históricos para o modelo aprender
+exemplos = [
+    ("O cliente solicita informações detalhadas sobre o contrato.", "Resposta Completa"),
+    ("Solicitação de atualização no contrato de serviços, mas contato sem sucesso.", "Devolvido - Falta de contato"),
+    ("O cliente deseja cancelar o pedido, mas a devolução foi encaminhada sem resposta final.", "Devolvido - Resposta inconclusiva"),
+]
+
+# Função para usar a API da OpenAI com exemplos históricos
+def classify_response_with_examples(text):
+    prompt = "Com base nos seguintes exemplos de classificação:\n"
+    for exemplo_texto, exemplo_classe in exemplos:
+        prompt += f"- {exemplo_texto}: {exemplo_classe}\n"
+    prompt += f"\nClassifique a seguinte análise da resposta: {text}"
+
+    try:
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=prompt,
+            max_tokens=50,
+            temperature=0.5
+        )
+        return response.choices[0].text.strip()
+    except Exception as e:
+        return f"Erro: {str(e)}"
+
+# Aplicar a função para classificar
+data['Classificacao'] = data['Sacl Cod Texto Manifestacao'].apply(classify_response_with_examples)
+
+# Salvar ou visualizar o resultado
+data.to_excel("base_classificada_com_historico.xlsx", index=False)
+print("Classificação concluída e salva em 'base_classificada_com_historico.xlsx'")
