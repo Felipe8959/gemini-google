@@ -1,8 +1,14 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.metrics import silhouette_score
+import plotly.express as px
 
 # Carregar dados
 @st.cache
@@ -11,6 +17,10 @@ def load_data():
     return df
 
 df = load_data()
+
+# Sidebar
+st.sidebar.title("Configurações de Clusterização")
+n_clusters = st.sidebar.slider('Número de Clusters', min_value=2, max_value=10, value=3)
 
 # Pré-processamento
 numeric_features = ['Tempo de Jornada (dias)']
@@ -26,31 +36,41 @@ preprocessor = ColumnTransformer(
 X_preprocessed = preprocessor.fit_transform(df)
 
 # Clusterização
-n_clusters = 3  # Número de clusters fixo ou ajustável via sidebar
 kmeans = KMeans(n_clusters=n_clusters, random_state=42)
 clusters = kmeans.fit_predict(X_preprocessed)
 df['Cluster'] = clusters
 
-# Características por cluster
-st.title("Características dos Clusters")
+# PCA para visualização
+pca = PCA(n_components=2)
+X_pca = pca.fit_transform(X_preprocessed.toarray())
 
-for cluster in sorted(df['Cluster'].unique()):
+# Visualização dos Clusters com PCA
+st.title("Visualização de Clusters")
+fig_pca = px.scatter(x=X_pca[:, 0], y=X_pca[:, 1], color=df['Cluster'].astype(str),
+                      labels={'x': 'PC1', 'y': 'PC2'}, title='Clusters - PCA')
+st.plotly_chart(fig_pca)
+
+# Gráfico de Outliers
+st.title("Análise de Outliers")
+for cluster in df['Cluster'].unique():
+    st.subheader(f"Cluster {cluster}")
     cluster_data = df[df['Cluster'] == cluster]
-    
-    # Estatísticas do cluster
-    cluster_summary = {
-        "Cluster": cluster,
-        "Tamanho": len(cluster_data),
-        "Tempo Médio de Jornada": cluster_data['Tempo de Jornada (dias)'].mean(),
-        "Satisfação Mais Comum": cluster_data['Satisfação'].mode()[0],
-        "Motivo Mais Comum": cluster_data['Motivo'].mode()[0]
-    }
-    
-    # Exibir Card
-    with st.container():
-        st.markdown(f"### Cluster {cluster}")
-        st.markdown(f"**Tamanho**: {cluster_summary['Tamanho']}")
-        st.markdown(f"**Tempo Médio de Jornada**: {cluster_summary['Tempo Médio de Jornada']:.2f} dias")
-        st.markdown(f"**Satisfação Mais Comum**: {cluster_summary['Satisfação']}")
-        st.markdown(f"**Motivo Mais Comum**: {cluster_summary['Motivo Mais Comum']}")
-        st.markdown("---")
+    fig, ax = plt.subplots()
+    sns.boxplot(data=cluster_data[numeric_features], ax=ax)
+    st.pyplot(fig)
+
+# Correlação
+st.title("Correlação entre Variáveis")
+fig_corr = plt.figure(figsize=(10, 8))
+sns.heatmap(df.corr(numeric_only=True), annot=True, cmap='coolwarm', fmt=".2f")
+st.pyplot(fig_corr)
+
+# Distância entre grupos
+st.title("Distância dos Centróides")
+st.write("Soma das distâncias ao centroide por cluster:")
+st.bar_chart(pd.DataFrame(kmeans.inertia_, columns=["Inertia"]))
+
+# Métrica Silhouette
+st.title("Análise de Silhueta")
+silhouette_avg = silhouette_score(X_preprocessed, clusters)
+st.write(f"Score de Silhueta para {n_clusters} clusters: {silhouette_avg:.2f}")
