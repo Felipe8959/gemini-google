@@ -1,14 +1,17 @@
-import google.generativeai as genai
+import streamlit as st
 
-genai.configure(api_key="AIzaSyDt8a19qwbZ_bJrweUJqwIriK61cwcFWgY")
+# Título do aplicativo
+st.title("Meu Primeiro Aplicativo Streamlit")
 
-for m in genai.list_models():
-    if 'generateContent' in m.supported_generation_methods:
-        print(m.name)
+# Subtítulo
+st.subheader("Introdução ao Streamlit")
 
-model = genai.GenerativeModel('gemini-pro')
+# Texto
+st.write("Este é um exemplo simples de aplicação web usando Streamlit!")
 
-response = model.generate_content("Me dê idéias de como utilizar o Gemini para ajudar uma empresa que realiza testes conforme Normas NBR e IEC", stream=True)
+# Input do usuário
+nome = st.text_input("Qual é o seu nome?")
 
-for chunk in response:
-    print(chunk.text)
+# Botão
+if st.button("Enviar"):
+    st.write(f"Olá, {nome}! Bem-vindo ao Streamlit.")
