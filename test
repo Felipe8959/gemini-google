@@ -1,5 +1,10 @@
 def identificar_tipo_documento(doc):
     doc = remover_formatacao(doc)
+    if len(doc) < 11:  # Preenche zeros à esquerda para CPF
+        doc = doc.zfill(11)
+    elif len(doc) < 14:  # Preenche zeros à esquerda para CNPJ
+        doc = doc.zfill(14)
+    
     if len(doc) == 11:
         return "CPF"
     elif len(doc) == 14:
