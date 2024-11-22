@@ -1,41 +1,93 @@
-import openai
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
 
-# Configure sua chave da API
-openai.api_key = "SUA_CHAVE_API_AQUI"
+# 1. Leitura dos dados
+# Substitua pelo caminho correto do arquivo
+df = pd.read_csv("caminho_para_seu_arquivo.csv")
 
-# Carregue sua base de dados
-file_path = "caminho/para/sua/base_fic.xlsx"
-data = pd.read_excel(file_path)
+# 2. Exploração inicial
+print("Primeiros registros:")
+print(df.head())
+print("\nResumo estatístico:")
+print(df.describe())
+print("\nInformação sobre os dados:")
+print(df.info())
 
-# Exemplos históricos para o modelo aprender
-exemplos = [
-    ("O cliente solicita informações detalhadas sobre o contrato.", "Resposta Completa"),
-    ("Solicitação de atualização no contrato de serviços, mas contato sem sucesso.", "Devolvido - Falta de contato"),
-    ("O cliente deseja cancelar o pedido, mas a devolução foi encaminhada sem resposta final.", "Devolvido - Resposta inconclusiva"),
-]
+# 3. Pré-processamento
+# Tratar valores nulos
+df = df.dropna()  # Remove linhas com valores nulos
 
-# Função para usar a API da OpenAI com exemplos históricos
-def classify_response_with_examples(text):
-    prompt = "Com base nos seguintes exemplos de classificação:\n"
-    for exemplo_texto, exemplo_classe in exemplos:
-        prompt += f"- {exemplo_texto}: {exemplo_classe}\n"
-    prompt += f"\nClassifique a seguinte análise da resposta: {text}"
+# Codificar variáveis categóricas
+label_encoders = {}
+for col in df.select_dtypes(include=["object"]).columns:
+    le = LabelEncoder()
+    df[col] = le.fit_transform(df[col])
+    label_encoders[col] = le
 
-    try:
-        response = openai.Completion.create(
-            engine="text-davinci-003",
-            prompt=prompt,
-            max_tokens=50,
-            temperature=0.5
-        )
-        return response.choices[0].text.strip()
-    except Exception as e:
-        return f"Erro: {str(e)}"
+# Normalizar variáveis numéricas
+scaler = StandardScaler()
+numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns
+df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
 
-# Aplicar a função para classificar
-data['Classificacao'] = data['Sacl Cod Texto Manifestacao'].apply(classify_response_with_examples)
+# 4. Análise de correlação e visualização
+corr_matrix = df.corr()
+plt.figure(figsize=(10, 8))
+sns.heatmap(corr_matrix, annot=True, cmap="coolwarm")
+plt.title("Matriz de Correlação")
+plt.show()
 
-# Salvar ou visualizar o resultado
-data.to_excel("base_classificada_com_historico.xlsx", index=False)
-print("Classificação concluída e salva em 'base_classificada_com_historico.xlsx'")
+# 5. Clusterização (K-Means)
+# Seleção de features para clusterização
+features = df[numeric_cols]
+
+# Aplicar K-Means
+kmeans = KMeans(n_clusters=3, random_state=42)
+df['Cluster'] = kmeans.fit_predict(features)
+
+# Visualizar clusters (usando PCA para redução de dimensionalidade)
+pca = PCA(n_components=2)
+reduced_features = pca.fit_transform(features)
+df['PCA1'] = reduced_features[:, 0]
+df['PCA2'] = reduced_features[:, 1]
+
+plt.figure(figsize=(10, 6))
+sns.scatterplot(data=df, x="PCA1", y="PCA2", hue="Cluster", palette="viridis")
+plt.title("Clusters Identificados (PCA)")
+plt.show()
+
+# 6. Análise Preditiva (Exemplo com Random Forest)
+# Divisão entre variáveis independentes (X) e dependente (y)
+if 'resultado_julgamento' in df.columns:  # Substitua pela coluna alvo do seu problema
+    y = df['resultado_julgamento']
+    X = df.drop(columns=['resultado_julgamento', 'Cluster', 'PCA1', 'PCA2'])
+
+    # Dividir os dados em treino e teste
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+    # Treinar modelo Random Forest
+    rf = RandomForestClassifier(random_state=42)
+    rf.fit(X_train, y_train)
+
+    # Predições
+    y_pred = rf.predict(X_test)
+
+    # Avaliação do modelo
+    print("\nRelatório de Classificação:")
+    print(classification_report(y_test, y_pred))
+    print("\nMatriz de Confusão:")
+    sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
+    plt.title("Matriz de Confusão")
+    plt.show()
+
+# 7. Exportar resultados
+# Salvar DataFrame com os clusters
+df.to_csv("resultados_com_clusters.csv", index=False)
+print("\nArquivo com clusters salvo como 'resultados_com_clusters.csv'")
