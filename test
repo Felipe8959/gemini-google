@@ -1,16 +1,108 @@
-def identificar_tipo_documento(doc):
-    doc = remover_formatacao(doc)
-    if len(doc) < 11:  # Preenche zeros à esquerda para CPF
-        doc = doc.zfill(11)
-    elif len(doc) < 14:  # Preenche zeros à esquerda para CNPJ
-        doc = doc.zfill(14)
-    
-    if len(doc) == 11:
-        return "CPF"
-    elif len(doc) == 14:
-        return "CNPJ"
-    else:
-        return "Desconhecido"
+import pandas as pd
+import re
 
-# Adicionando a coluna ao DataFrame
-df['tipo_documento'] = df['documentos'].apply(identificar_tipo_documento)
+# Função para remover caracteres não numéricos
+def remover_formatacao(doc):
+    return re.sub(r'\D', '', str(doc))
+
+# Função para adaptar o padrão de 15 dígitos
+def adaptar_para_15_digitos(doc):
+    doc = remover_formatacao(doc)
+    if len(doc) == 11:  # CPF
+        doc = doc[:9] + "0000" + doc[9:]  # Adiciona os quatro zeros antes dos dígitos verificadores
+    return doc.zfill(15)  # Completa com zeros à esquerda até 15 dígitos
+
+# Função para formatar CPF
+def formatar_cpf(cpf):
+    cpf = remover_formatacao(cpf)
+    if len(cpf) == 15:
+        cpf = cpf[:3] + "." + cpf[3:6] + "." + cpf[6:9] + "-" + cpf[13:15]
+    return cpf
+
+# Função para formatar CNPJ
+def formatar_cnpj(cnpj):
+    cnpj = remover_formatacao(cnpj)
+    if len(cnpj) == 15:
+        cnpj = cnpj[:2] + "." + cnpj[2:5] + "." + cnpj[5:8] + "/" + cnpj[8:12] + "-" + cnpj[12:]
+    return cnpj
+
+# Função para validar CPF
+def validar_cpf(cpf):
+    cpf = remover_formatacao(cpf)[:11]  # Remove formatação e pega os primeiros 11 dígitos
+    if len(cpf) != 11 or cpf in [str(i) * 11 for i in range(10)]:
+        return False, None, None
+    # Validação do dígito verificador
+    primeiro_digito, segundo_digito = None, None
+    for i in range(9, 11):
+        soma = sum(int(cpf[num]) * ((i + 1) - num) for num in range(i))
+        digito = (soma * 10) % 11
+        if digito == 10:
+            digito = 0
+        if i == 9:
+            primeiro_digito = digito
+        if i == 10:
+            segundo_digito = digito
+        if digito != int(cpf[i]):
+            return False, primeiro_digito, segundo_digito
+    return True, primeiro_digito, segundo_digito
+
+# Função para validar CNPJ
+def validar_cnpj(cnpj):
+    cnpj = remover_formatacao(cnpj)[:14]  # Remove formatação e pega os primeiros 14 dígitos
+    if len(cnpj) != 14:
+        return False, None, None
+    pesos_1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    pesos_2 = [6] + pesos_1
+    primeiro_digito, segundo_digito = None, None
+    for i in range(12, 14):
+        soma = sum(int(cnpj[num]) * pesos_1[num] if i == 12 else pesos_2[num] for num in range(i))
+        digito = soma % 11
+        if digito < 2:
+            digito = 0
+        else:
+            digito = 11 - digito
+        if i == 12:
+            primeiro_digito = digito
+        if i == 13:
+            segundo_digito = digito
+        if digito != int(cnpj[i]):
+            return False, primeiro_digito, segundo_digito
+    return True, primeiro_digito, segundo_digito
+
+# Função principal para processar o documento
+def processar_documento(doc):
+    doc = str(doc)
+    doc_15_digitos = adaptar_para_15_digitos(doc)
+    doc_sem_formatacao = remover_formatacao(doc_15_digitos)
+    
+    if len(doc_sem_formatacao) == 15 and doc_sem_formatacao[9:13] == "0000":  # CPF com 4 zeros
+        valido, primeiro_digito, segundo_digito = validar_cpf(doc_sem_formatacao[:11])
+        doc_formatado = formatar_cpf(doc_15_digitos)
+    elif len(doc_sem_formatacao) == 15:  # CNPJ
+        valido, primeiro_digito, segundo_digito = validar_cnpj(doc_sem_formatacao)
+        doc_formatado = formatar_cnpj(doc_15_digitos)
+    else:
+        valido, primeiro_digito, segundo_digito, doc_formatado = False, None, None, doc
+    
+    return {
+        "documento_15_digitos": doc_15_digitos,
+        "documento_sem_formatacao": doc_sem_formatacao,
+        "documento_formatado": doc_formatado,
+        "primeiro_digito": primeiro_digito,
+        "segundo_digito": segundo_digito,
+        "valido": "Sim" if valido else "Não"
+    }
+
+# Exemplo de DataFrame
+data = {'documentos': ['123.456.789-09', '12.345.678/0001-95', '11111111111', '12345678901234']}
+df = pd.DataFrame(data)
+
+# Processando os documentos
+resultados = df['documentos'].apply(processar_documento)
+resultados_df = pd.DataFrame(resultados.tolist())
+
+# Combinando os resultados com o DataFrame original
+df = pd.concat([df, resultados_df], axis=1)
+
+# Exibindo o DataFrame
+print(df)
