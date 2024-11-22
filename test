@@ -1,93 +1,56 @@
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
+import re
 
-# 1. Leitura dos dados
-# Substitua pelo caminho correto do arquivo
-df = pd.read_csv("caminho_para_seu_arquivo.csv")
+# Função para validar CPF
+def validar_cpf(cpf):
+    cpf = re.sub(r'\D', '', cpf)  # Remove caracteres não numéricos
+    if len(cpf) != 11 or cpf in [str(i) * 11 for i in range(10)]:
+        return False
+    # Validação do dígito verificador
+    for i in range(9, 11):
+        soma = sum(int(cpf[num]) * ((i + 1) - num) for num in range(i))
+        digito = (soma * 10) % 11
+        if digito == 10:
+            digito = 0
+        if digito != int(cpf[i]):
+            return False
+    return True
 
-# 2. Exploração inicial
-print("Primeiros registros:")
-print(df.head())
-print("\nResumo estatístico:")
-print(df.describe())
-print("\nInformação sobre os dados:")
-print(df.info())
+# Função para validar CNPJ
+def validar_cnpj(cnpj):
+    cnpj = re.sub(r'\D', '', cnpj)  # Remove caracteres não numéricos
+    if len(cnpj) != 14:
+        return False
+    pesos_1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2]
+    pesos_2 = [6] + pesos_1
+    # Validação dos dígitos verificadores
+    for i in range(12, 14):
+        soma = sum(int(cnpj[num]) * pesos_1[num] if i == 12 else pesos_2[num] for num in range(i))
+        digito = soma % 11
+        if digito < 2:
+            digito = 0
+        else:
+            digito = 11 - digito
+        if digito != int(cnpj[i]):
+            return False
+    return True
 
-# 3. Pré-processamento
-# Tratar valores nulos
-df = df.dropna()  # Remove linhas com valores nulos
+# Função para identificar o tipo de documento
+def identificar_documento(doc):
+    doc = str(doc)
+    if validar_cpf(doc):
+        return "CPF"
+    elif validar_cnpj(doc):
+        return "CNPJ"
+    else:
+        return "Nenhum"
 
-# Codificar variáveis categóricas
-label_encoders = {}
-for col in df.select_dtypes(include=["object"]).columns:
-    le = LabelEncoder()
-    df[col] = le.fit_transform(df[col])
-    label_encoders[col] = le
+# Exemplo de DataFrame
+data = {'documentos': ['123.456.789-09', '12.345.678/0001-95', '11111111111', '12345678901234']}
+df = pd.DataFrame(data)
 
-# Normalizar variáveis numéricas
-scaler = StandardScaler()
-numeric_cols = df.select_dtypes(include=["float64", "int64"]).columns
-df[numeric_cols] = scaler.fit_transform(df[numeric_cols])
+# Aplicando a função
+df['tipo_documento'] = df['documentos'].apply(identificar_documento)
 
-# 4. Análise de correlação e visualização
-corr_matrix = df.corr()
-plt.figure(figsize=(10, 8))
-sns.heatmap(corr_matrix, annot=True, cmap="coolwarm")
-plt.title("Matriz de Correlação")
-plt.show()
-
-# 5. Clusterização (K-Means)
-# Seleção de features para clusterização
-features = df[numeric_cols]
-
-# Aplicar K-Means
-kmeans = KMeans(n_clusters=3, random_state=42)
-df['Cluster'] = kmeans.fit_predict(features)
-
-# Visualizar clusters (usando PCA para redução de dimensionalidade)
-pca = PCA(n_components=2)
-reduced_features = pca.fit_transform(features)
-df['PCA1'] = reduced_features[:, 0]
-df['PCA2'] = reduced_features[:, 1]
-
-plt.figure(figsize=(10, 6))
-sns.scatterplot(data=df, x="PCA1", y="PCA2", hue="Cluster", palette="viridis")
-plt.title("Clusters Identificados (PCA)")
-plt.show()
-
-# 6. Análise Preditiva (Exemplo com Random Forest)
-# Divisão entre variáveis independentes (X) e dependente (y)
-if 'resultado_julgamento' in df.columns:  # Substitua pela coluna alvo do seu problema
-    y = df['resultado_julgamento']
-    X = df.drop(columns=['resultado_julgamento', 'Cluster', 'PCA1', 'PCA2'])
-
-    # Dividir os dados em treino e teste
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-    # Treinar modelo Random Forest
-    rf = RandomForestClassifier(random_state=42)
-    rf.fit(X_train, y_train)
-
-    # Predições
-    y_pred = rf.predict(X_test)
-
-    # Avaliação do modelo
-    print("\nRelatório de Classificação:")
-    print(classification_report(y_test, y_pred))
-    print("\nMatriz de Confusão:")
-    sns.heatmap(confusion_matrix(y_test, y_pred), annot=True, fmt='d', cmap='Blues')
-    plt.title("Matriz de Confusão")
-    plt.show()
-
-# 7. Exportar resultados
-# Salvar DataFrame com os clusters
-df.to_csv("resultados_com_clusters.csv", index=False)
-print("\nArquivo com clusters salvo como 'resultados_com_clusters.csv'")
+# Exibindo o resultado
+print(df)
