@@ -1,4 +1,76 @@
-if doc_15_digitos[9:13] == "0000":  # CPF
-    doc_sem_formatacao = doc_15_digitos[:9] + doc_15_digitos[13:]  # Remove os 4 zeros do CPF
-else:  # CNPJ
-    doc_sem_formatacao = doc_15_digitos.lstrip("0")  # Remove zeros à esquerda para CNPJ
+### 1. **Exploração de Dados Avançada**
+   - **Análise de Correlações Não Evidentes**:
+     - Utilize técnicas estatísticas para detectar relações sutis entre `julgado` e outras variáveis.
+     - Exemplos:
+       - **Teste de correlação** para colunas numéricas e categóricas (usando métricas como correlação de Pearson, Spearman ou Cramér's V).
+       - **Análise de dependência condicional**: Avaliar como a decisão de julgamento muda quando consideramos múltiplas variáveis simultaneamente.
+   - **Análise de Variáveis Cruzadas**:
+     - Cruzar colunas entre si para encontrar interações que não aparecem isoladamente (exemplo: combinação de `ifaml_grp` + `imotvo_manif` pode estar relacionada ao julgamento).
+
+---
+
+### 2. **Clusterização e Agrupamento**
+   - **Identificar Perfis de Casos**:
+     - Utilize algoritmos de clusterização, como k-means, DBSCAN ou hierárquico, para agrupar casos com características semelhantes. Veja se os casos julgados (1) pertencem a clusters específicos.
+     - Inclua variáveis como `motivo`, `grupo`, `intervalo`, e outras informações que podem descrever os casos.
+   - **Analisar Outliers**:
+     - Identifique amostras que se destacam no comportamento, pois elas podem dar pistas sobre critérios escondidos.
+
+---
+
+### 3. **Modelagem Preditiva**
+   - **Construção de Modelos Supervisionados**:
+     - Treine um modelo de machine learning para prever o valor de `julgado` (1 ou 0).
+     - Algoritmos sugeridos:
+       - Árvore de decisão (facilita a interpretação).
+       - Random Forest ou Gradient Boosting (como XGBoost, CatBoost).
+       - Modelos lineares regulares, como regressão logística.
+     - Importância das variáveis: Analise quais variáveis o modelo considera mais importantes para prever o julgamento.
+
+   - **Interpretação com Explainability**:
+     - Use técnicas como **SHAP** (SHapley Additive exPlanations) ou **LIME** (Local Interpretable Model-Agnostic Explanations) para entender como o modelo toma decisões.
+     - Isso pode revelar padrões escondidos nas escolhas.
+
+---
+
+### 4. **Análise Temporal ou Sequencial**
+   - **Reconstruir o Processo de Escolha**:
+     - Analise o comportamento dos registros ao longo do tempo. A escolha pode estar vinculada a características do **dia anterior** ou a um padrão periódico.
+     - Exemplo: O critério pode ser algo como "o primeiro registro com X características no dia".
+   - **Analisar Ordem dos Eventos**:
+     - A posição dos registros no tempo (`dabert_prot`, `habert_prot`) pode influenciar. Ex.: "Escolha ocorre a cada N registros ou a cada N minutos".
+
+---
+
+### 5. **Reengenharia do Processo**
+   - **Observar a Rotina de Escolha**:
+     - Se possível, converse com quem está mais próximo do processo que define o julgamento. Processos manuais ou semi-automatizados muitas vezes seguem regras "implícitas" que não estão bem documentadas.
+     - Procure por:
+       - Regras baseadas em horários.
+       - Critérios escondidos que possam não estar registrados diretamente nos dados.
+
+---
+
+### 6. **Técnicas Específicas para Descobrir Padrões**
+   - **Algoritmos de Descoberta de Regras**:
+     - Use algoritmos como **Apriori** ou **FP-Growth** para identificar padrões de associação entre variáveis que levam a julgamentos.
+   - **Análise Baseada em Similaridade**:
+     - Identifique casos semelhantes (k-Nearest Neighbors ou medidas de similaridade) e veja se o julgamento depende de características compartilhadas por eles.
+   - **Simulação de Cenários**:
+     - Crie cenários artificiais variando os dados de entrada (ex.: alterar valores de colunas específicas) para ver o que leva à mudança em `julgado`.
+
+---
+
+### 7. **Usar Teorias de Aleatoriedade Controlada**
+   - Caso os dados pareçam aleatórios, avalie se estão sendo usados critérios como **probabilidade condicional**:
+     - Exemplo: "20% dos casos de um grupo específico serão julgados", ou "casos com `motivo X` têm maior chance de serem julgados, mas não são julgados sempre".
+   - Teste isso simulando probabilidades para diferentes segmentos.
+
+---
+
+### Resumo do Caminho:
+1. Aplique análises de correlação e clusterização para ver padrões ocultos.
+2. Use modelos de machine learning para prever `julgado` e analisar as variáveis mais importantes.
+3. Estude o comportamento temporal e sequencial dos dados.
+4. Utilize técnicas de descoberta de regras para identificar associações inesperadas.
+5. Revise o processo de seleção para entender regras implícitas.
