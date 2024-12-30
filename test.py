@@ -1,18 +1,22 @@
-import os
-from datetime import datetime
+from sklearn.pipeline import Pipeline
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
 
-def listar_ultimas_interacoes(pasta):
-    try:
-        arquivos = os.listdir(pasta)
-        for arquivo in arquivos:
-            caminho_arquivo = os.path.join(pasta, arquivo)
-            if os.path.isfile(caminho_arquivo):
-                ultima_modificacao = os.path.getmtime(caminho_arquivo)
-                data_formatada = datetime.fromtimestamp(ultima_modificacao).strftime('%Y-%m-%d %H:%M:%S')
-                print(f"Arquivo: {arquivo} - Última Interação: {data_formatada}")
-    except Exception as e:
-        print(f"Ocorreu um erro: {e}")
-
-# Exemplo de uso:
-pasta_especifica = '/caminho/para/sua/pasta'
-listar_ultimas_interacoes(pasta_especifica)
+pipeline = Pipeline([
+    ("tfidf", TfidfVectorizer(
+        ngram_range=(1, 2),
+        max_df=0.9,
+        min_df=2,
+        max_features=5000,
+        sublinear_tf=True,
+        # Caso deseje testar remoção de stopwords:
+        # stop_words='portuguese'
+    )),
+    ("clf", LogisticRegression(
+        penalty='l2',
+        C=1.0,               # regularização mediana
+        solver='lbfgs',
+        random_state=42,
+        class_weight='balanced'  # útil se houver desbalanceamento
+    ))
+])
