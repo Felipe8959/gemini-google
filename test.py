@@ -1,26 +1,22 @@
-from imblearn.pipeline import Pipeline  # Use o pipeline do imblearn
-from imblearn.over_sampling import SMOTE
+# Após ajustar o pipeline
+pipeline.fit(data_pd['clean_text'], data_pd['ANALISE_RESPOSTA_1'])
 
-# Atualize o pipeline para incluir o SMOTE
-pipeline = Pipeline([
-    ('tfidf', TfidfVectorizer(
-        ngram_range=(1, 2),
-        max_df=0.9,
-        max_features=5000,
-        sublinear_tf=True
-    )),
-    ('smote', SMOTE(sampling_strategy='auto', random_state=42)),  # Aplica o SMOTE
-    ('lr', LogisticRegression(
-        penalty='l2',
-        C=1.0,  # Regularização
-        random_state=6162,
-        class_weight='balanced'
-    ))
-])
+# Obtenção das palavras mais importantes
+tfidf = pipeline.named_steps['tfidf']
+lr = pipeline.named_steps['lr']
 
-# Ajuste o pipeline usando os dados de treino
-pipeline.fit(train_data_pd['clean_text'], train_data_pd['ANALISE_RESPOSTA_1'])
+# Obtém as palavras e seus pesos
+feature_names = tfidf.get_feature_names_out()
+coef = lr.coef_[0]
 
-# Faça previsões
-test_data_pd['predictions'] = pipeline.predict(test_data_pd['clean_text'])
-test_data_pd['probabilities'] = pipeline.predict_proba(test_data_pd['clean_text'])[:, 1]
+# Ordena por importância
+top_features = sorted(zip(coef, feature_names), reverse=True, key=lambda x: abs(x[0]))
+
+# Exibe as 10 palavras mais importantes
+print("Palavras mais importantes (positivas):")
+for coef, word in top_features[:10]:
+    print(f"{word}: {coef}")
+
+print("\nPalavras mais importantes (negativas):")
+for coef, word in top_features[-10:]:
+    print(f"{word}: {coef}")
