@@ -8,11 +8,11 @@ from sklearn.pipeline import Pipeline
 data_pd['clean_text'] = data_pd['clean_text'].fillna('')
 data_pd['char_text'] = data_pd['char_text'].fillna(0)
 
-# Garantir que as colunas sejam arrays 2D
+# Garantindo que as colunas estejam no formato adequado
 X = data_pd[['clean_text', 'char_text']]  # Seleciona as colunas como DataFrame
-y = data_pd['ANALISE_RESPOSTA_I']         # Coluna target
+y = data_pd['ANALISE_RESPOSTA_I']
 
-# Criando um transformador de colunas
+# Criando o transformador de colunas
 preprocessor = ColumnTransformer(
     transformers=[
         ("text", TfidfVectorizer(
@@ -22,8 +22,9 @@ preprocessor = ColumnTransformer(
             max_features=5000,
             sublinear_tf=True
         ), 'clean_text'),
-        ("numeric", StandardScaler(), 'char_text')  # Normalização da variável numérica
-    ]
+        ("numeric", StandardScaler(), 'char_text')  # Normalização para a coluna numérica
+    ],
+    remainder='drop'  # Ignora outras colunas
 )
 
 # Configurando o pipeline
