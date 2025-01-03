@@ -1,54 +1,39 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import pandas as pd
 
-# Preenchendo valores nulos
-data_pd['clean_text'] = data_pd['clean_text'].fillna('')
-data_pd['char_count'] = data_pd['char_count'].fillna(0)
-
-# Separando as variáveis independentes (X) e dependente (y)
-X = data_pd[['clean_text', 'char_count']]
+# 1. Dados
+X = data_pd[['clean_text', 'char_coun']]
 y = data_pd['ANALISE_RESPOSTA_I']
 
-# Dividindo os dados em treinamento e teste
+# 2. Divisão de treino/teste
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Configurando o pré-processamento
+# 3. Pré-processamento
+text_transformer = TfidfVectorizer()
+num_transformer = StandardScaler()
+
 preprocessor = ColumnTransformer(
     transformers=[
-        ('tfidf', TfidfVectorizer(ngram_range=(1, 2)), 'clean_text'),
-        ('scaler', StandardScaler(), 'char_count')
-    ],
-    remainder='passthrough'  # Garante que as colunas são processadas corretamente
+        ('text', text_transformer, 'clean_text'),
+        ('num', num_transformer, 'char_coun')
+    ]
 )
 
-# Corrigindo para garantir que a entrada seja bidimensional
-class Ensure2D:
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        return X if len(X.shape) == 2 else X.reshape(-1, 1)
-
-# Ajustando o pipeline
-pipeline = Pipeline([
+# 4. Pipeline do modelo
+pipeline = Pipeline(steps=[
     ('preprocessor', preprocessor),
-    ('clf', LogisticRegression(class_weight={0: 3.9, 1: 1}))  # Balanceamento de classes
+    ('classifier', RandomForestClassifier(random_state=42))
 ])
 
-# Convertendo colunas para formatos apropriados
-X_train['char_count'] = X_train['char_count'].values.reshape(-1, 1)
-X_test['char_count'] = X_test['char_count'].values.reshape(-1, 1)
-
-# Treinando o modelo
+# 5. Treinamento
 pipeline.fit(X_train, y_train)
 
-# Fazendo previsões no conjunto de teste
+# 6. Avaliação
 y_pred = pipeline.predict(X_test)
-
-# Adicionando as probabilidades de classificação à tabela original
-data_pd['score'] = pipeline.predict_proba(X)[:, 1]
+print(classification_report(y_test, y_pred))
