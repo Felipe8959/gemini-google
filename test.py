@@ -4,7 +4,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-import numpy as np
+import pandas as pd
 
 # Preenchendo valores nulos
 data_pd['clean_text'] = data_pd['clean_text'].fillna('')
@@ -22,30 +22,27 @@ preprocessor = ColumnTransformer(
     transformers=[
         ('tfidf', TfidfVectorizer(ngram_range=(1, 2)), 'clean_text'),
         ('scaler', StandardScaler(), 'char_count')
-    ]
+    ],
+    remainder='passthrough'  # Garante que as colunas são processadas corretamente
 )
 
-# Adicionando uma conversão explícita de colunas 1D para 2D
-class ColumnSelector:
-    def __init__(self, column_name):
-        self.column_name = column_name
-
+# Corrigindo para garantir que a entrada seja bidimensional
+class Ensure2D:
     def fit(self, X, y=None):
         return self
 
     def transform(self, X):
-        return X[[self.column_name]]
+        return X if len(X.shape) == 2 else X.reshape(-1, 1)
 
 # Ajustando o pipeline
 pipeline = Pipeline([
-    ('preprocessor', ColumnTransformer(
-        transformers=[
-            ('tfidf', TfidfVectorizer(ngram_range=(1, 2)), 'clean_text'),
-            ('char_count', StandardScaler(), 'char_count')
-        ]
-    )),
+    ('preprocessor', preprocessor),
     ('clf', LogisticRegression(class_weight={0: 3.9, 1: 1}))  # Balanceamento de classes
 ])
+
+# Convertendo colunas para formatos apropriados
+X_train['char_count'] = X_train['char_count'].values.reshape(-1, 1)
+X_test['char_count'] = X_test['char_count'].values.reshape(-1, 1)
 
 # Treinando o modelo
 pipeline.fit(X_train, y_train)
