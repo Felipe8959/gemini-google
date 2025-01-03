@@ -1,38 +1,42 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.preprocessing import StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
 
-# Preenchendo valores nulos
+# Preenchendo valores nulos na coluna 'clean_text'
 data_pd['clean_text'] = data_pd['clean_text'].fillna('')
-data_pd['char_text'] = data_pd['char_text'].fillna(0)
+data_pd['char_count'] = data_pd['char_count'].fillna(0)
 
-# Criando uma nova coluna que combina clean_text e char_text
-data_pd['combined_text'] = data_pd['clean_text'] + " [CHAR_COUNT: " + data_pd['char_text'].astype(str) + "]"
+# Separando as variáveis independentes (X) e dependente (y)
+X = data_pd[['clean_text', 'char_count']]
+y = data_pd['ANALISE_RESPOSTA_I']
 
-# Configurando o pipeline com a nova coluna
+# Dividindo os dados em treinamento e teste
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Configurando o pré-processamento para as colunas
+preprocessor = ColumnTransformer(
+    transformers=[
+        ('tfidf', TfidfVectorizer(ngram_range=(1, 2)), 'clean_text'),
+        ('scaler', StandardScaler(), 'char_count')
+    ],
+    remainder='drop'
+)
+
+# Configurando o pipeline
 pipeline = Pipeline([
-    ("tfidf", TfidfVectorizer(
-        ngram_range=(1, 2),
-        max_df=0.9,
-        min_df=100,
-        max_features=5000,
-        sublinear_tf=True
-    )),
-    ("clf", LogisticRegression(
-        penalty='l2',
-        C=1.0,
-        solver='saga',
-        random_state=42,
-        max_iter=1000,
-        class_weight={0: 3.9, 1: 1}  # Para desbalanceamento
-    ))
+    ('preprocessor', preprocessor),
+    ('clf', LogisticRegression(class_weight={0: 3.9, 1: 1}))  # Balanceamento de classes
 ])
 
-# Treinando o modelo com a nova coluna
-pipeline.fit(data_pd['combined_text'], data_pd['ANALISE_RESPOSTA_I'])
+# Treinando o modelo com os dados de treinamento
+pipeline.fit(X_train, y_train)
 
-# Fazendo predições
-data_pd['score'] = pipeline.predict_proba(data_pd['combined_text'])[:, 1]
+# Fazendo previsões no conjunto de teste
+y_pred = pipeline.predict(X_test)
 
-# Convertendo de volta para DataFrame do Spark, se necessário
-scored_data = spark.createDataFrame(data_pd)
+# Adicionando as probabilidades de classificação à tabela original
+data_pd['score'] = pipeline.predict_proba(data_pd[['clean_text', 'char_count']])[:, 1]
