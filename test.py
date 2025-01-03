@@ -3,11 +3,14 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
-from sklearn.pipeline import FeatureUnion
 
 # Preenchendo valores nulos
 data_pd['clean_text'] = data_pd['clean_text'].fillna('')
 data_pd['char_text'] = data_pd['char_text'].fillna(0)
+
+# Garantir que as colunas sejam arrays 2D
+X = data_pd[['clean_text', 'char_text']]  # Seleciona as colunas como DataFrame
+y = data_pd['ANALISE_RESPOSTA_I']         # Coluna target
 
 # Criando um transformador de colunas
 preprocessor = ColumnTransformer(
@@ -37,10 +40,10 @@ pipeline = Pipeline([
 ])
 
 # Treinando o modelo
-pipeline.fit(data_pd[['clean_text', 'char_text']], data_pd['ANALISE_RESPOSTA_I'])
+pipeline.fit(X, y)
 
 # Fazendo predições
-data_pd['score'] = pipeline.predict_proba(data_pd[['clean_text', 'char_text']])[:, 1]
+data_pd['score'] = pipeline.predict_proba(X)[:, 1]
 
 # Convertendo de volta para DataFrame do Spark, se necessário
 scored_data = spark.createDataFrame(data_pd)
