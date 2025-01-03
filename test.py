@@ -1,5 +1,3 @@
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
@@ -8,28 +6,18 @@ from sklearn.pipeline import Pipeline
 data_pd['clean_text'] = data_pd['clean_text'].fillna('')
 data_pd['char_text'] = data_pd['char_text'].fillna(0)
 
-# Garantindo que as colunas estejam no formato adequado
-X = data_pd[['clean_text', 'char_text']]  # Seleciona as colunas como DataFrame
-y = data_pd['ANALISE_RESPOSTA_I']
+# Criando uma nova coluna que combina clean_text e char_text
+data_pd['combined_text'] = data_pd['clean_text'] + " [CHAR_COUNT: " + data_pd['char_text'].astype(str) + "]"
 
-# Criando o transformador de colunas
-preprocessor = ColumnTransformer(
-    transformers=[
-        ("text", TfidfVectorizer(
-            ngram_range=(1, 2),
-            max_df=0.9,
-            min_df=100,
-            max_features=5000,
-            sublinear_tf=True
-        ), 'clean_text'),
-        ("numeric", StandardScaler(), 'char_text')  # Normalização para a coluna numérica
-    ],
-    remainder='drop'  # Ignora outras colunas
-)
-
-# Configurando o pipeline
+# Configurando o pipeline com a nova coluna
 pipeline = Pipeline([
-    ("preprocessor", preprocessor),
+    ("tfidf", TfidfVectorizer(
+        ngram_range=(1, 2),
+        max_df=0.9,
+        min_df=100,
+        max_features=5000,
+        sublinear_tf=True
+    )),
     ("clf", LogisticRegression(
         penalty='l2',
         C=1.0,
@@ -40,11 +28,11 @@ pipeline = Pipeline([
     ))
 ])
 
-# Treinando o modelo
-pipeline.fit(X, y)
+# Treinando o modelo com a nova coluna
+pipeline.fit(data_pd['combined_text'], data_pd['ANALISE_RESPOSTA_I'])
 
 # Fazendo predições
-data_pd['score'] = pipeline.predict_proba(X)[:, 1]
+data_pd['score'] = pipeline.predict_proba(data_pd['combined_text'])[:, 1]
 
 # Convertendo de volta para DataFrame do Spark, se necessário
 scored_data = spark.createDataFrame(data_pd)
