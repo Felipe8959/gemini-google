@@ -1,75 +1,46 @@
-Segue uma estrutura sugerida para sua apresentação:
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.stats import ks_2samp
 
----
+# Carregar os dados
+file_path = "/mnt/data/seu_arquivo.csv"  # Substitua pelo nome correto do arquivo
+data = pd.read_csv(file_path, encoding="latin1")  # Tente ajustar a codificação conforme necessário
 
-### **Apresentação para Gerência: Insights sobre Pesquisa de Satisfação e Influências Psicológicas**
+# Supondo que as colunas relevantes sejam:
+# 'ANALISE_RESPOSTA_I' (rótulo real) e 'probabilities' (probabilidade predita da classe positiva)
 
-#### **Slide 1: Título**
-**"Comportamento do Cliente e Psicologia nas Pesquisas de Satisfação"**  
-_Entendendo como horários e dias da semana impactam a percepção de satisfação_
+# Separando as probabilidades preditas para cada classe
+probs_class_0 = data[data['ANALISE_RESPOSTA_I'] == 0]['probabilities']
+probs_class_1 = data[data['ANALISE_RESPOSTA_I'] == 1]['probabilities']
 
----
+# Ordenando os valores para calcular a CDF
+probs_class_0_sorted = np.sort(probs_class_0)
+probs_class_1_sorted = np.sort(probs_class_1)
 
-#### **Slide 2: Introdução**
-- **Objetivo da apresentação**: 
-  - Demonstrar as variações na percepção de satisfação ao longo do tempo (horários e dias da semana).
-  - Explorar como fatores psicológicos influenciam as respostas nas pesquisas.
-- **Importância**: Dados de satisfação direcionam ações estratégicas para melhoria contínua.
+# Criando as funções de distribuição acumulada (CDF)
+cdf_class_0 = np.arange(1, len(probs_class_0_sorted) + 1) / len(probs_class_0_sorted)
+cdf_class_1 = np.arange(1, len(probs_class_1_sorted) + 1) / len(probs_class_1_sorted)
 
----
+# Calculando o KS Statistic
+ks_stat, _ = ks_2samp(probs_class_0, probs_class_1)
 
-#### **Slide 3: Dados Coletados**
-**Insights da pesquisa:**
-1. **Horários**:
-   - Notas médias menores entre 9h e 10h da manhã.
-   - Notas médias mais altas no período da tarde.
-2. **Dias da Semana**:
-   - Segunda-feira apresenta notas mais baixas.
-   - A média de notas aumenta progressivamente ao longo da semana.
+# Plotando o gráfico de KS
+plt.figure(figsize=(8, 6))
+plt.plot(probs_class_0_sorted, cdf_class_0, label="Classe 0", color="blue")
+plt.plot(probs_class_1_sorted, cdf_class_1, label="Classe 1", color="red")
 
----
+# Destacando o ponto de máxima separação
+idx_max_sep = np.argmax(np.abs(cdf_class_0 - cdf_class_1))
+plt.vlines(probs_class_0_sorted[idx_max_sep], cdf_class_0[idx_max_sep], cdf_class_1[idx_max_sep],
+           colors="black", linestyles="dashed", label=f"KS = {ks_stat:.3f}")
 
-#### **Slide 4: Análise Psicológica**
-**Fatores psicológicos em pesquisas de satisfação**:
-- Segundo o artigo [Psicologia por trás das pesquisas de satisfação](https://palpito.com.br/a-psicologia-por-tras-das-pesquisas-de-satisfacao-do-cliente/#google_vignette):  
-  1. **Estado emocional do cliente**:  
-     - Pela manhã, as pessoas tendem a estar mais apressadas ou preocupadas com as tarefas do dia.
-     - À tarde, o cliente está mais relaxado, propenso a fornecer avaliações mais positivas.
-  2. **Efeito "monday blues"**:  
-     - Segunda-feira é geralmente associada ao retorno de responsabilidades, impactando a disposição geral.  
-     - Conforme a semana avança, há uma leve melhora no humor, refletindo-se em notas mais altas.
-  3. **Recência e memória**:  
-     - Clientes lembram mais dos momentos recentes, o que pode influenciar positivamente ou negativamente as respostas.
+# Configurações do gráfico
+plt.xlabel("Probabilidade Predita")
+plt.ylabel("Função de Distribuição Acumulada (CDF)")
+plt.title("Curvas KS - Separação entre Classes")
+plt.legend()
+plt.grid()
 
----
-
-#### **Slide 5: Impacto Estratégico**
-**Por que isso importa?**
-- **Tomada de decisão informada**:
-  - Ajustar o envio de pesquisas para horários/dias que aumentem a taxa de respostas e a qualidade dos feedbacks.
-- **Ações direcionadas**:
-  - Foco em melhorar o atendimento em horários/dias críticos (ex.: manhãs de segunda-feira).
-- **Antecipação de comportamento**:
-  - Planejar estratégias baseadas nos padrões emocionais e comportamentais dos clientes.
-
----
-
-#### **Slide 6: Recomendações**
-**Ações sugeridas:**
-1. Realizar testes com envio de pesquisas em horários alternativos (ex.: após as 14h).
-2. Implementar estratégias de acolhimento e comunicação mais amigável nas manhãs de segunda-feira.
-3. Reforçar o treinamento das equipes para horários e dias com maior criticidade.
-4. Utilizar análises contínuas para verificar a eficácia dessas ações.
-
----
-
-#### **Slide 7: Conclusão**
-- **Resumo**:
-  - A percepção do cliente varia significativamente com base no horário e dia.
-  - Fatores psicológicos são cruciais para entender e melhorar a experiência.
-- **Próximos passos**:
-  - Aplicar estratégias de melhoria e acompanhar o impacto nos índices de satisfação.
-
----
-
-Caso deseje, posso criar os slides ou detalhar algum ponto específico.
+# Exibir o gráfico
+plt.show()
