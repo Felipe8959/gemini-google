@@ -1,46 +1,99 @@
+# ========================================================
+# EXEMPLO DE SCRIPT PARA PREVER 'PRODUTO_FEBRABAN' E 'MOTIVO_FEBRABAN'
+# ========================================================
+
 import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-from scipy.stats import ks_2samp
+from sklearn.model_selection import train_test_split
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
 
-# Carregar os dados
-file_path = "/mnt/data/seu_arquivo.csv"  # Substitua pelo nome correto do arquivo
-data = pd.read_csv(file_path, encoding="latin1")  # Tente ajustar a codificação conforme necessário
+# 1) Ler a planilha / CSV
+# --------------------------------------------------------
+# Ajuste o "sep" se necessário, dependendo do delimitador do seu arquivo
+df = pd.read_csv('base.csv', sep=';', encoding='utf-8')
 
-# Supondo que as colunas relevantes sejam:
-# 'ANALISE_RESPOSTA_I' (rótulo real) e 'probabilities' (probabilidade predita da classe positiva)
+# 2) Criar a coluna de texto unificada (exemplo)
+# --------------------------------------------------------
+# Se houver valores ausentes em alguma dessas colunas, usamos fillna('') para evitar problemas
+df['texto_completo'] = (
+    df['DESCR FAMILIA'].fillna('') + ' ' +
+    df['DESCR PRODUTO'].fillna('') + ' ' +
+    df['DESCR ASSUNTO'].fillna('')
+)
 
-# Separando as probabilidades preditas para cada classe
-probs_class_0 = data[data['ANALISE_RESPOSTA_I'] == 0]['probabilities']
-probs_class_1 = data[data['ANALISE_RESPOSTA_I'] == 1]['probabilities']
+# 3) Separar em treino e teste (para PRODUTO_FEBRABAN)
+# --------------------------------------------------------
+X_produto = df['texto_completo']
+y_produto = df['PRODUTO_FEBRABAN']  # Alvo 1
 
-# Ordenando os valores para calcular a CDF
-probs_class_0_sorted = np.sort(probs_class_0)
-probs_class_1_sorted = np.sort(probs_class_1)
+# Divisão treino/teste
+X_train_produto, X_test_produto, y_train_produto, y_test_produto = train_test_split(
+    X_produto, y_produto, 
+    test_size=0.3,         # 30% para teste, 70% para treino
+    random_state=42,       # semente fixa para reproduzibilidade
+    stratify=y_produto     # mantém proporção de classes
+)
 
-# Criando as funções de distribuição acumulada (CDF)
-cdf_class_0 = np.arange(1, len(probs_class_0_sorted) + 1) / len(probs_class_0_sorted)
-cdf_class_1 = np.arange(1, len(probs_class_1_sorted) + 1) / len(probs_class_1_sorted)
+# 4) Vetorização com TF-IDF (para PRODUTO_FEBRABAN)
+# --------------------------------------------------------
+vectorizer_produto = TfidfVectorizer(
+    max_features=5000,     # limite de 5.000 termos (ajuste conforme necessário)
+    ngram_range=(1,2),     # unigrams e bigrams (opcional)
+    stop_words=None        # pode definir uma lista de stopwords para PT-BR, se quiser
+)
 
-# Calculando o KS Statistic
-ks_stat, _ = ks_2samp(probs_class_0, probs_class_1)
+X_train_produto_tfidf = vectorizer_produto.fit_transform(X_train_produto)
+X_test_produto_tfidf = vectorizer_produto.transform(X_test_produto)
 
-# Plotando o gráfico de KS
-plt.figure(figsize=(8, 6))
-plt.plot(probs_class_0_sorted, cdf_class_0, label="Classe 0", color="blue")
-plt.plot(probs_class_1_sorted, cdf_class_1, label="Classe 1", color="red")
+# 5) Modelo para PRODUTO_FEBRABAN (Logistic Regression)
+# --------------------------------------------------------
+model_produto = LogisticRegression(max_iter=1000)
+model_produto.fit(X_train_produto_tfidf, y_train_produto)
 
-# Destacando o ponto de máxima separação
-idx_max_sep = np.argmax(np.abs(cdf_class_0 - cdf_class_1))
-plt.vlines(probs_class_0_sorted[idx_max_sep], cdf_class_0[idx_max_sep], cdf_class_1[idx_max_sep],
-           colors="black", linestyles="dashed", label=f"KS = {ks_stat:.3f}")
+# 6) Avaliação do modelo (PRODUTO_FEBRABAN)
+# --------------------------------------------------------
+y_pred_produto = model_produto.predict(X_test_produto_tfidf)
+print("=== CLASSIFICAÇÃO PARA 'PRODUTO_FEBRABAN' ===")
+print(classification_report(y_test_produto, y_pred_produto))
 
-# Configurações do gráfico
-plt.xlabel("Probabilidade Predita")
-plt.ylabel("Função de Distribuição Acumulada (CDF)")
-plt.title("Curvas KS - Separação entre Classes")
-plt.legend()
-plt.grid()
+# --------------------------------------------------------
+# *REPITA* o processo para 'MOTIVO_FEBRABAN'
+# --------------------------------------------------------
 
-# Exibir o gráfico
-plt.show()
+# 3b) Separar em treino e teste (para MOTIVO_FEBRABAN)
+X_motivo = df['texto_completo']
+y_motivo = df['MOTIVO_FEBRABAN']  # Alvo 2
+
+X_train_motivo, X_test_motivo, y_train_motivo, y_test_motivo = train_test_split(
+    X_motivo, y_motivo,
+    test_size=0.3,
+    random_state=42,
+    stratify=y_motivo
+)
+
+# 4b) Vetorização com TF-IDF (para MOTIVO_FEBRABAN)
+# (Podemos criar um TF-IDF separado, pois o conjunto de classes e distribuição de dados
+#  podem ser diferentes. Em alguns casos, você pode reaproveitar o mesmo, mas aqui vamos
+#  demonstrar como seria rodar separado.)
+vectorizer_motivo = TfidfVectorizer(
+    max_features=5000,
+    ngram_range=(1,2),
+    stop_words=None
+)
+
+X_train_motivo_tfidf = vectorizer_motivo.fit_transform(X_train_motivo)
+X_test_motivo_tfidf = vectorizer_motivo.transform(X_test_motivo)
+
+# 5b) Modelo para MOTIVO_FEBRABAN (Logistic Regression)
+model_motivo = LogisticRegression(max_iter=1000)
+model_motivo.fit(X_train_motivo_tfidf, y_train_motivo)
+
+# 6b) Avaliação do modelo (MOTIVO_FEBRABAN)
+y_pred_motivo = model_motivo.predict(X_test_motivo_tfidf)
+print("=== CLASSIFICAÇÃO PARA 'MOTIVO_FEBRABAN' ===")
+print(classification_report(y_test_motivo, y_pred_motivo))
+
+# ========================================================
+# FIM DO SCRIPT
+# ========================================================
