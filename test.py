@@ -1,46 +1,18 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.pipeline import Pipeline
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
-import joblib
+from pyspark.sql.functions import broadcast
 
-# 1. Carregando dados de exemplo
-df = pd.read_csv('base.csv', sep=';', encoding='utf-8')
+df_tdoc = spark.table("pr_platfun.psdc_ing.docto_pessoa_unic_hive")
+df_tuf = spark.table("pr_platfun.psdc_ing.ender_pessoa")
 
-# 2. Unindo colunas de texto em uma única (exemplo)
-df['texto_completo'] = (
-    df['DESCR FAMILIA'].fillna('') + ' ' +
-    df['DESCR PRODUTO'].fillna('') + ' ' +
-    df['DESCR ASSUNTO'].fillna('')
-)
+df_tdoc = broadcast(df_tdoc)  # Aplica broadcast se o DF for pequeno
 
-# 3. Separando features (X) e alvo (y) para PRODUTO_FEBRABAN
-X_produto = df['texto_completo']
-y_produto = df['PRODUTO_FEBRABAN']
+df_base = df_tuf.join(df_tdoc, df_tuf.cclub == df_tdoc.cclub, "left_outer") \
+    .filter(df_tuf.csgl_uf.isNotNull()) \
+    .filter(df_tuf.csgl_uf != '') \
+    .selectExpr("UPPER(csgl_uf) AS UF_CLIENTE",
+                "CONCAT(LPAD(CAST(cpf_cnpj_nro AS STRING), 9, '0'), " +
+                "LPAD(CAST(cpf_cnpj_fil AS STRING), 4, '0'), " +
+                "LPAD(CAST(cpf_cnpj_ctr AS STRING), 2, '0')) AS CPF_CNPJ_COMPLETO") \
+    .distinct() \
+    .limit(100)
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X_produto, y_produto,
-    test_size=0.3,
-    random_state=42,
-    stratify=y_produto
-)
-
-# 4. Criando uma Pipeline que faz TF-IDF e depois usa LogisticRegression
-pipeline_produto = Pipeline([
-    ('tfidf', TfidfVectorizer(max_features=5000, ngram_range=(1,2))),
-    ('clf', LogisticRegression(max_iter=1000))
-])
-
-# 5. Treinando a pipeline
-pipeline_produto.fit(X_train, y_train)
-
-# 6. Avaliando rapidamente (PRODUTO_FEBRABAN)
-y_pred = pipeline_produto.predict(X_test)
-print("=== CLASSIFICAÇÃO PARA 'PRODUTO_FEBRABAN' ===")
-print(classification_report(y_test, y_pred))
-
-# 7. Salvando a pipeline inteira em um arquivo .pkl
-joblib.dump(pipeline_produto, 'pipeline_produto.pkl')
-print("Arquivo 'pipeline_produto.pkl' salvo com sucesso!")
+df_base.show()
