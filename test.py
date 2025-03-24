@@ -1,4 +1,27 @@
+# =====================================
+# 3) PRÉ-PROCESSAMENTO E TRATAMENTO DE DADOS
+# =====================================
 
+# Em dados reais, verifique:
+#  - Valores ausentes (NaN)
+#  - Duplicidades
+#  - Padronização de categorias
+#  - Outliers (se for o caso)
+
+# Exemplo: Remoção de possíveis duplicados
+df.drop_duplicates(inplace=True)
+
+# Converter categorias em dummies ou outra codificação para clusterização
+# (Vamos supor que queremos usar 'idade', 'renda', 'divida', 'uf' e 'sexo' para clusterização, e deixaremos 'segmento' para checar depois)
+df_encoded = pd.get_dummies(df[['idade', 'renda', 'divida', 'uf', 'sexo']], drop_first=True)
+
+# Padronização (StandardScaler) das variáveis numéricas
+scaler = StandardScaler()
+df_scaled = scaler.fit_transform(df_encoded)
+
+# Convertendo novamente para DataFrame apenas para fins de visualização
+df_cluster = pd.DataFrame(df_scaled, columns=df_encoded.columns)
+df_cluster.head()
 
 # =====================================
 # 4) DEFININDO O NÚMERO DE CLUSTERS (K)
