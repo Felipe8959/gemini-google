@@ -1,123 +1,173 @@
-# =====================================
-# 3) PRÉ-PROCESSAMENTO E TRATAMENTO DE DADOS
-# =====================================
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
-# Em dados reais, verifique:
-#  - Valores ausentes (NaN)
-#  - Duplicidades
-#  - Padronização de categorias
-#  - Outliers (se for o caso)
+import torch
+from torch.utils.data import Dataset
+import numpy as np
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 
-# Exemplo: Remoção de possíveis duplicados
-df.drop_duplicates(inplace=True)
+# Hugging Face Transformers
+from transformers import (
+    BertTokenizer,
+    BertForSequenceClassification,
+    Trainer,
+    TrainingArguments
+)
 
-# Converter categorias em dummies ou outra codificação para clusterização
-# (Vamos supor que queremos usar 'idade', 'renda', 'divida', 'uf' e 'sexo' para clusterização, e deixaremos 'segmento' para checar depois)
-df_encoded = pd.get_dummies(df[['idade', 'renda', 'divida', 'uf', 'sexo']], drop_first=True)
+# Exemplo de dados simulados
+# Substitua por seus dados reais
+textos_train = [
+    "Essa resposta está completa e bem detalhada.",
+    "Não há informação suficiente aqui.",
+    "O texto cobre todos os pontos necessários.",
+    "Faltam vários detalhes importantes."
+]
+labels_train = [1, 0, 1, 0]  # 1 = completa, 0 = incompleta
 
-# Padronização (StandardScaler) das variáveis numéricas
-scaler = StandardScaler()
-df_scaled = scaler.fit_transform(df_encoded)
+textos_val = [
+    "A resposta cobre parcialmente o que precisa.",
+    "Está muito bem explicada e com detalhes."
+]
+labels_val = [0, 1]
 
-# Convertendo novamente para DataFrame apenas para fins de visualização
-df_cluster = pd.DataFrame(df_scaled, columns=df_encoded.columns)
-df_cluster.head()
+####################################################################
+# 1. Definindo um Dataset personalizado para tokenizar e armazenar
+####################################################################
+class RespostasDataset(Dataset):
+    def __init__(self, textos, labels, tokenizer, max_length=128):
+        self.textos = textos
+        self.labels = labels
+        self.tokenizer = tokenizer
+        self.max_length = max_length
 
-# =====================================
-# 4) DEFININDO O NÚMERO DE CLUSTERS (K)
-# =====================================
+    def __len__(self):
+        return len(self.textos)
 
-# Método do "cotovelo" (Elbow method) para ter uma ideia de qual K pode ser interessante
-wcss = []
-K_values = range(2, 8)  # Vamos testar de 2 até 7 clusters
+    def __getitem__(self, idx):
+        texto = self.textos[idx]
+        label = self.labels[idx]
 
-for k in K_values:
-    kmeans = KMeans(n_clusters=k, random_state=42)
-    kmeans.fit(df_cluster)
-    wcss.append(kmeans.inertia_)
+        # Tokeniza o texto
+        tokens = self.tokenizer(
+            texto,
+            max_length=self.max_length,
+            padding='max_length',
+            truncation=True,
+            return_tensors='pt'
+        )
 
-# Plot do Elbow
-plt.figure(figsize=(6,4))
-plt.plot(K_values, wcss, marker='o')
-plt.title('Método do Cotovelo (Elbow Method)')
-plt.xlabel('Número de Clusters (k)')
-plt.ylabel('WCSS (Within-Cluster Sum of Squares)')
-plt.show()
+        # Cria um dicionário com input_ids, attention_mask e label
+        item = {
+            'input_ids': tokens['input_ids'].squeeze(0),
+            'attention_mask': tokens['attention_mask'].squeeze(0),
+            'labels': torch.tensor(label, dtype=torch.long)
+        }
+        return item
 
 
-# =====================================
-# 5) AVALIAÇÃO COM MÉTRICA DE SILHUETA
-# =====================================
+####################################################################
+# 2. Função de Métricas (Accuracy, Precision, Recall, F1)
+####################################################################
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    preds = np.argmax(logits, axis=-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        labels, preds, average='binary'
+    )
+    acc = accuracy_score(labels, preds)
+    return {
+        'accuracy': acc,
+        'precision': precision,
+        'recall': recall,
+        'f1': f1
+    }
 
-silhouette_scores = {}
-for k in range(2, 8):
-    kmeans = KMeans(n_clusters=k, random_state=42)
-    labels = kmeans.fit_predict(df_cluster)
-    silhouette_scores[k] = silhouette_score(df_cluster, labels)
+####################################################################
+# 3. Carregando Tokenizer e Modelo BERT
+####################################################################
+# Escolha um modelo pré-treinado apropriado.
+# Exemplos: 'bert-base-uncased' (Inglês), 'neuralmind/bert-base-portuguese-cased' (Português), etc.
+# Aqui, exemplo em português:
+model_name = "neuralmind/bert-base-portuguese-cased"
 
-for k, v in silhouette_scores.items():
-    print(f"K = {k} -> Silhouette Score: {v:.4f}")
+tokenizer = BertTokenizer.from_pretrained(model_name)
+model = BertForSequenceClassification.from_pretrained(
+    model_name,
+    num_labels=2  # Classificação binária
+)
 
-# Exemplo de visualização do Silhouette Score
-plt.figure(figsize=(6,4))
-plt.bar(silhouette_scores.keys(), silhouette_scores.values())
-plt.title('Silhouette Score por número de Clusters')
-plt.xlabel('Número de Clusters (k)')
-plt.ylabel('Silhouette Score')
-plt.show()
+####################################################################
+# 4. Preparando os Datasets de Treino e Validação
+####################################################################
+train_dataset = RespostasDataset(textos_train, labels_train, tokenizer)
+val_dataset = RespostasDataset(textos_val, labels_val, tokenizer)
 
-# =====================================
-# 6) ESCOLHA DO NÚMERO DE CLUSTERS E TREINAMENTO FINAL
-# =====================================
+####################################################################
+# 5. Configurando Parâmetros de Treino
+####################################################################
+training_args = TrainingArguments(
+    output_dir='./modelo_bert_respostas',   # Diretório para salvar checkpoints
+    num_train_epochs=3,                     # Ajuste conforme a necessidade
+    per_device_train_batch_size=4,          # Ajuste para caber na GPU/CPU
+    per_device_eval_batch_size=4,
+    evaluation_strategy="epoch",           # Avalia ao final de cada época
+    logging_steps=10,                       # Intervalos de logging
+    save_steps=50,                          # Salva checkpoints a cada X steps
+    load_best_model_at_end=True,            # Carrega o melhor modelo ao final
+    metric_for_best_model="accuracy",       # Qual métrica usar para "melhor modelo"
+    greater_is_better=True                  # Se a métrica maior é melhor
+)
 
-# Suponha que, analisando os gráficos e métricas, decidimos por K=3
-# (isso é um exemplo; escolha com base em suas análises)
+####################################################################
+# 6. Montando o Trainer
+####################################################################
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=val_dataset,
+    compute_metrics=compute_metrics
+)
 
-k_final = 3
-kmeans_final = KMeans(n_clusters=k_final, random_state=42)
-df['cluster'] = kmeans_final.fit_predict(df_cluster)
+####################################################################
+# 7. Executando o Treinamento
+####################################################################
+trainer.train()
 
-# Verificando a quantidade de registros em cada cluster
-df['cluster'].value_counts()
+####################################################################
+# 8. Avaliação Final no Conjunto de Validação
+####################################################################
+eval_results = trainer.evaluate()
+print("Resultados de avaliação:", eval_results)
 
-# =====================================
-# 7) ANÁLISE DOS CLUSTERS ENCONTRADOS
-# =====================================
+####################################################################
+# 9. Salvando o Modelo Treinado
+####################################################################
+trainer.save_model("./modelo_classificador_completo_incompleto")
 
-# Podemos fazer estatísticas descritivas por cluster
-descricao_por_cluster = df.groupby('cluster').agg({
-    'idade': ['mean', 'median'],
-    'renda': ['mean', 'median'],
-    'divida': ['mean', 'median'],
-    'uf': lambda x: x.value_counts().index[0],     # Moda da UF
-    'sexo': lambda x: x.value_counts().index[0],   # Moda do Sexo
-    'segmento': lambda x: x.value_counts().index[0]# Moda do Segmento
-})
+####################################################################
+# 10. Exemplo de Inferência em Novos Textos
+####################################################################
+novos_textos = [
+    "A explicação está extremamente detalhada e não falta nada.",
+    "O autor não desenvolveu o assunto o suficiente."
+]
 
-descricao_por_cluster
+# Tokenizar e prever
+for texto in novos_textos:
+    tokens_novo = tokenizer(
+        texto,
+        max_length=128,
+        padding='max_length',
+        truncation=True,
+        return_tensors='pt'
+    )
 
-# =====================================
-# 8) VISUALIZANDO OS CLUSTERS (EXEMPLO)
-# =====================================
-
-# Nota: Visualizar clusters multidimensionais em 2D/3D pode exigir redução de dimensionalidade (ex.: PCA).
-# Vamos apenas demonstrar um PCA para plotar em 2D:
-
-from sklearn.decomposition import PCA
-
-pca = PCA(n_components=2)
-pca_result = pca.fit_transform(df_cluster)
-df['pca1'] = pca_result[:,0]
-df['pca2'] = pca_result[:,1]
-
-# Plot
-plt.figure(figsize=(6,4))
-for c in range(k_final):
-    plt.scatter(df[df['cluster'] == c]['pca1'],
-                df[df['cluster'] == c]['pca2'],
-                label=f'Cluster {c}')
-plt.title('Visualização dos Clusters em 2D (via PCA)')
-plt.xlabel('PCA1')
-plt.ylabel('PCA2')
-plt.legend()
-plt.show()
+    with torch.no_grad():
+        output = model(**tokens_novo)
+        logits = output.logits
+        pred = torch.argmax(logits, dim=1).item()  # 0 ou 1
+        classe = "Completa" if pred == 1 else "Incompleta"
+    print(f"Texto: {texto}")
+    print(f"Classe prevista: {classe}")
+    print("-"*50)
