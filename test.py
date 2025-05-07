@@ -1,173 +1,95 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+# ── 1. Instalação (ambiente ≥ Python 3.9 + GPU com 12 GB) ──────────────
+!pip install -U "transformers>=4.40" datasets evaluate accelerate \
+             bitsandbytes                 # (<‑‑ fp16 + LORA se quiser)
 
-import torch
-from torch.utils.data import Dataset
-import numpy as np
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+# ── 2. Carrega o dataset ------------------------------------------------
+# Supondo três CSVs com colunas: text,label  (label ∈ {0,1})
+from datasets import load_dataset
 
-# Hugging Face Transformers
-from transformers import (
-    BertTokenizer,
-    BertForSequenceClassification,
-    Trainer,
-    TrainingArguments
-)
+data_files = {
+    "train": "train.csv",
+    "validation": "val.csv",
+    "test": "test.csv"
+}
+ds = load_dataset("csv", data_files=data_files)
 
-# Exemplo de dados simulados
-# Substitua por seus dados reais
-textos_train = [
-    "Essa resposta está completa e bem detalhada.",
-    "Não há informação suficiente aqui.",
-    "O texto cobre todos os pontos necessários.",
-    "Faltam vários detalhes importantes."
-]
-labels_train = [1, 0, 1, 0]  # 1 = completa, 0 = incompleta
+# ── 3. Tokenização ------------------------------------------------------
+from transformers import AutoTokenizer
+tok = AutoTokenizer.from_pretrained(
+        "neuralmind/bert-base-portuguese-cased", 
+        do_lower_case=False)
 
-textos_val = [
-    "A resposta cobre parcialmente o que precisa.",
-    "Está muito bem explicada e com detalhes."
-]
-labels_val = [0, 1]
+max_len = 256             # aumente só se a maioria dos textos for longa
 
-####################################################################
-# 1. Definindo um Dataset personalizado para tokenizar e armazenar
-####################################################################
-class RespostasDataset(Dataset):
-    def __init__(self, textos, labels, tokenizer, max_length=128):
-        self.textos = textos
-        self.labels = labels
-        self.tokenizer = tokenizer
-        self.max_length = max_length
+def tokenize(batch):
+    return tok(
+        batch["text"],
+        truncation=True,
+        padding="max_length",
+        max_length=max_len
+    )
 
-    def __len__(self):
-        return len(self.textos)
+ds_tok = ds.map(tokenize, batched=True, remove_columns=["text"])
 
-    def __getitem__(self, idx):
-        texto = self.textos[idx]
-        label = self.labels[idx]
+# ── 4. Modelo -----------------------------------------------------------
+from transformers import AutoModelForSequenceClassification
+model = AutoModelForSequenceClassification.from_pretrained(
+            "neuralmind/bert-base-portuguese-cased",
+            num_labels=2,
+            problem_type="single_label_classification")
 
-        # Tokeniza o texto
-        tokens = self.tokenizer(
-            texto,
-            max_length=self.max_length,
-            padding='max_length',
-            truncation=True,
-            return_tensors='pt'
-        )
+# (Opcional) Congelar as 4 primeiras camadas se dataset <5 k amostras:
+for param in model.bert.embeddings.parameters():
+    param.requires_grad = False
+for layer in model.bert.encoder.layer[:4]:
+    for param in layer.parameters():
+        param.requires_grad = False
 
-        # Cria um dicionário com input_ids, attention_mask e label
-        item = {
-            'input_ids': tokens['input_ids'].squeeze(0),
-            'attention_mask': tokens['attention_mask'].squeeze(0),
-            'labels': torch.tensor(label, dtype=torch.long)
-        }
-        return item
+# ── 5. Métricas ---------------------------------------------------------
+import evaluate, numpy as np
+acc_metric = evaluate.load("accuracy")
+f1_metric  = evaluate.load("f1")
 
-
-####################################################################
-# 2. Função de Métricas (Accuracy, Precision, Recall, F1)
-####################################################################
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
     preds = np.argmax(logits, axis=-1)
-    precision, recall, f1, _ = precision_recall_fscore_support(
-        labels, preds, average='binary'
-    )
-    acc = accuracy_score(labels, preds)
     return {
-        'accuracy': acc,
-        'precision': precision,
-        'recall': recall,
-        'f1': f1
+        "accuracy": acc_metric.compute(predictions=preds, references=labels)["accuracy"],
+        "f1":       f1_metric.compute(predictions=preds, references=labels, average="macro")["f1"]
     }
 
-####################################################################
-# 3. Carregando Tokenizer e Modelo BERT
-####################################################################
-# Escolha um modelo pré-treinado apropriado.
-# Exemplos: 'bert-base-uncased' (Inglês), 'neuralmind/bert-base-portuguese-cased' (Português), etc.
-# Aqui, exemplo em português:
-model_name = "neuralmind/bert-base-portuguese-cased"
-
-tokenizer = BertTokenizer.from_pretrained(model_name)
-model = BertForSequenceClassification.from_pretrained(
-    model_name,
-    num_labels=2  # Classificação binária
+# ── 6. Argumentos de treino --------------------------------------------
+from transformers import TrainingArguments, Trainer, DataCollatorWithPadding
+args = TrainingArguments(
+    output_dir="bertimbau_resp",
+    evaluation_strategy="epoch",
+    save_strategy="epoch",
+    logging_steps=50,
+    num_train_epochs=3,            # comece com 3; aumente se não houver overfit
+    per_device_train_batch_size=16,
+    per_device_eval_batch_size=16,
+    learning_rate=2e-5,            # variação típica: 1e‑5 → 5e‑5
+    weight_decay=0.01,
+    warmup_ratio=0.1,              # 10 % dos steps
+    lr_scheduler_type="linear",
+    gradient_accumulation_steps=2, # efetivo = 32 se memória curta
+    fp16=True,                     # exige GPU Ampere+ ou ROCm
+    load_best_model_at_end=True,
+    metric_for_best_model="f1",
+    seed=42
 )
 
-####################################################################
-# 4. Preparando os Datasets de Treino e Validação
-####################################################################
-train_dataset = RespostasDataset(textos_train, labels_train, tokenizer)
-val_dataset = RespostasDataset(textos_val, labels_val, tokenizer)
-
-####################################################################
-# 5. Configurando Parâmetros de Treino
-####################################################################
-training_args = TrainingArguments(
-    output_dir='./modelo_bert_respostas',   # Diretório para salvar checkpoints
-    num_train_epochs=3,                     # Ajuste conforme a necessidade
-    per_device_train_batch_size=4,          # Ajuste para caber na GPU/CPU
-    per_device_eval_batch_size=4,
-    evaluation_strategy="epoch",           # Avalia ao final de cada época
-    logging_steps=10,                       # Intervalos de logging
-    save_steps=50,                          # Salva checkpoints a cada X steps
-    load_best_model_at_end=True,            # Carrega o melhor modelo ao final
-    metric_for_best_model="accuracy",       # Qual métrica usar para "melhor modelo"
-    greater_is_better=True                  # Se a métrica maior é melhor
-)
-
-####################################################################
-# 6. Montando o Trainer
-####################################################################
 trainer = Trainer(
     model=model,
-    args=training_args,
-    train_dataset=train_dataset,
-    eval_dataset=val_dataset,
+    args=args,
+    train_dataset=ds_tok["train"],
+    eval_dataset=ds_tok["validation"],
+    tokenizer=tok,
+    data_collator=DataCollatorWithPadding(tok),
     compute_metrics=compute_metrics
 )
 
-####################################################################
-# 7. Executando o Treinamento
-####################################################################
 trainer.train()
-
-####################################################################
-# 8. Avaliação Final no Conjunto de Validação
-####################################################################
-eval_results = trainer.evaluate()
-print("Resultados de avaliação:", eval_results)
-
-####################################################################
-# 9. Salvando o Modelo Treinado
-####################################################################
-trainer.save_model("./modelo_classificador_completo_incompleto")
-
-####################################################################
-# 10. Exemplo de Inferência em Novos Textos
-####################################################################
-novos_textos = [
-    "A explicação está extremamente detalhada e não falta nada.",
-    "O autor não desenvolveu o assunto o suficiente."
-]
-
-# Tokenizar e prever
-for texto in novos_textos:
-    tokens_novo = tokenizer(
-        texto,
-        max_length=128,
-        padding='max_length',
-        truncation=True,
-        return_tensors='pt'
-    )
-
-    with torch.no_grad():
-        output = model(**tokens_novo)
-        logits = output.logits
-        pred = torch.argmax(logits, dim=1).item()  # 0 ou 1
-        classe = "Completa" if pred == 1 else "Incompleta"
-    print(f"Texto: {texto}")
-    print(f"Classe prevista: {classe}")
-    print("-"*50)
+trainer.evaluate(ds_tok["test"])
+model.save_pretrained("bertimbau_resp/best")
+tok.save_pretrained("bertimbau_resp/best")
