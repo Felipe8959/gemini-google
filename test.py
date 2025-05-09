@@ -1,95 +1,112 @@
-# ── 1. Instalação (ambiente ≥ Python 3.9 + GPU com 12 GB) ──────────────
-!pip install -U "transformers>=4.40" datasets evaluate accelerate \
-             bitsandbytes                 # (<‑‑ fp16 + LORA se quiser)
+Fine‑tuning BERTimbau para classificar respostas completas (1) vs. incompletas (0)
 
-# ── 2. Carrega o dataset ------------------------------------------------
-# Supondo três CSVs com colunas: text,label  (label ∈ {0,1})
-from datasets import load_dataset
+-----------------------------------------------------------------------------
 
-data_files = {
-    "train": "train.csv",
-    "validation": "val.csv",
-    "test": "test.csv"
-}
-ds = load_dataset("csv", data_files=data_files)
+Pré‑requisitos (execute uma única vez, p.ex. num notebook Colab, VSCode, etc.)
 
-# ── 3. Tokenização ------------------------------------------------------
-from transformers import AutoTokenizer
-tok = AutoTokenizer.from_pretrained(
-        "neuralmind/bert-base-portuguese-cased", 
-        do_lower_case=False)
+!pip install -q transformers datasets evaluate scikit-learn accelerate
 
-max_len = 256             # aumente só se a maioria dos textos for longa
+import pandas as pd from datasets import Dataset from transformers import ( AutoTokenizer, AutoModelForSequenceClassification, TrainingArguments, Trainer, DataCollatorWithPadding, ) import evaluate import numpy as np from sklearn.model_selection import train_test_split
 
-def tokenize(batch):
-    return tok(
-        batch["text"],
-        truncation=True,
-        padding="max_length",
-        max_length=max_len
-    )
+-----------------------------------------------------------------------------
 
-ds_tok = ds.map(tokenize, batched=True, remove_columns=["text"])
+1. Carregar o DataFrame data
 
-# ── 4. Modelo -----------------------------------------------------------
-from transformers import AutoModelForSequenceClassification
-model = AutoModelForSequenceClassification.from_pretrained(
-            "neuralmind/bert-base-portuguese-cased",
-            num_labels=2,
-            problem_type="single_label_classification")
+-----------------------------------------------------------------------------
 
-# (Opcional) Congelar as 4 primeiras camadas se dataset <5 k amostras:
-for param in model.bert.embeddings.parameters():
-    param.requires_grad = False
-for layer in model.bert.encoder.layer[:4]:
-    for param in layer.parameters():
-        param.requires_grad = False
+Supondo que já exista na sessão (colunas "text_full" e "label")
 
-# ── 5. Métricas ---------------------------------------------------------
-import evaluate, numpy as np
-acc_metric = evaluate.load("accuracy")
-f1_metric  = evaluate.load("f1")
+Caso esteja em CSV/parquet, descomente:
 
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    preds = np.argmax(logits, axis=-1)
-    return {
-        "accuracy": acc_metric.compute(predictions=preds, references=labels)["accuracy"],
-        "f1":       f1_metric.compute(predictions=preds, references=labels, average="macro")["f1"]
-    }
+data = pd.read_csv("respostas_clientes.csv")
 
-# ── 6. Argumentos de treino --------------------------------------------
-from transformers import TrainingArguments, Trainer, DataCollatorWithPadding
-args = TrainingArguments(
-    output_dir="bertimbau_resp",
-    evaluation_strategy="epoch",
-    save_strategy="epoch",
-    logging_steps=50,
-    num_train_epochs=3,            # comece com 3; aumente se não houver overfit
-    per_device_train_batch_size=16,
-    per_device_eval_batch_size=16,
-    learning_rate=2e-5,            # variação típica: 1e‑5 → 5e‑5
-    weight_decay=0.01,
-    warmup_ratio=0.1,              # 10 % dos steps
-    lr_scheduler_type="linear",
-    gradient_accumulation_steps=2, # efetivo = 32 se memória curta
-    fp16=True,                     # exige GPU Ampere+ ou ROCm
-    load_best_model_at_end=True,
-    metric_for_best_model="f1",
-    seed=42
-)
+assert {"text_full", "label"}.issubset(data.columns), "Colunas obrigatórias não encontradas."
 
-trainer = Trainer(
-    model=model,
-    args=args,
-    train_dataset=ds_tok["train"],
-    eval_dataset=ds_tok["validation"],
-    tokenizer=tok,
-    data_collator=DataCollatorWithPadding(tok),
-    compute_metrics=compute_metrics
-)
+df = data[["text_full", "label"]].rename(columns={"text_full": "text", "label": "label"})
 
-trainer.train()
-trainer.evaluate(ds_tok["test"])
-model.save_pretrained("bertimbau_resp/best")
-tok.save_pretrained("bertimbau_resp/best")
+-----------------------------------------------------------------------------
+
+2. Dividir em treino e validação estratificados
+
+-----------------------------------------------------------------------------
+
+train_df, val_df = train_test_split( df, test_size=0.2, stratify=df["label"], random_state=42 )
+
+train_ds = Dataset.from_pandas(train_df.reset_index(drop=True)) val_ds = Dataset.from_pandas(val_df.reset_index(drop=True))
+
+-----------------------------------------------------------------------------
+
+3. Tokenizar com BERTimbau (cased)
+
+-----------------------------------------------------------------------------
+
+model_id = "neuralmind/bert-base-portuguese-cased"
+
+print("Baixando tokenizer & modelo…") tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+MAX_LENGTH = 256  # truncate/pad a 256 tokens (≈ 512 é o limite de BERT)
+
+def preprocess(batch): return tokenizer( batch["text"], truncation=True, padding="max_length", max_length=MAX_LENGTH, )
+
+train_ds = train_ds.map(preprocess, batched=True, remove_columns=["text"]) val_ds = val_ds.map(preprocess, batched=True, remove_columns=["text"])
+
+-----------------------------------------------------------------------------
+
+4. Data collator e modelo
+
+-----------------------------------------------------------------------------
+
+collator = DataCollatorWithPadding(tokenizer) model = AutoModelForSequenceClassification.from_pretrained(model_id, num_labels=2)
+
+-----------------------------------------------------------------------------
+
+5. Métricas
+
+-----------------------------------------------------------------------------
+
+accuracy = evaluate.load("accuracy") f1 = evaluate.load("f1")
+
+def compute_metrics(eval_pred): logits, labels = eval_pred preds = np.argmax(logits, axis=-1) acc = accuracy.compute(predictions=preds, references=labels)["accuracy"] f1_macro = f1.compute(predictions=preds, references=labels, average="macro")["f1"] return {"accuracy": acc, "f1": f1_macro}
+
+-----------------------------------------------------------------------------
+
+6. Parâmetros de treinamento
+
+-----------------------------------------------------------------------------
+
+args = TrainingArguments( output_dir="bertimbau-classifier", evaluation_strategy="epoch", save_strategy="epoch", learning_rate=2e-5, per_device_train_batch_size=16, per_device_eval_batch_size=16, num_train_epochs=3, weight_decay=0.01, logging_steps=50, load_best_model_at_end=True, metric_for_best_model="f1", greater_is_better=True, report_to="none",  # desabilita W&B se não usado )
+
+trainer = Trainer( model=model, args=args, train_dataset=train_ds, eval_dataset=val_ds, tokenizer=tokenizer, data_collator=collator, compute_metrics=compute_metrics, )
+
+-----------------------------------------------------------------------------
+
+7. Treinar
+
+-----------------------------------------------------------------------------
+
+print("\n==== Iniciando treino ====") trainer.train()
+
+-----------------------------------------------------------------------------
+
+8. Avaliação final e salvamento
+
+-----------------------------------------------------------------------------
+
+print("\n==== Avaliação final ====") metrics = trainer.evaluate() print(metrics)
+
+trainer.save_model("bertimbau-classifier/best") print("\nModelo salvo em bertimbau-classifier/best")
+
+-----------------------------------------------------------------------------
+
+9. Função de inferência prática
+
+-----------------------------------------------------------------------------
+
+import torch
+
+def predict(text: str): """Retorna tupla (label_predito, probabilidade).""" model.eval() with torch.no_grad(): inputs = tokenizer(text, return_tensors="pt", truncation=True, padding=True, max_length=MAX_LENGTH) outputs = model(**inputs) probs = torch.softmax(outputs.logits, dim=-1).squeeze().cpu().numpy() label = int(np.argmax(probs)) return label, float(probs[label])
+
+Exemplo rápido
+
+if name == "main": exemplo = "Cliente não atendeu após 3 tentativas [SEP] Precisamos de retorno para concluir a solicitação." lbl, p = predict(exemplo) print(f"Label predito: {lbl} | confiança: {p:.3f}")
+
