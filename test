@@ -1,188 +1,153 @@
-# -*- coding: utf-8 -*-
-"""
-Demo: Complaint text analysis for BACEN with fictitious dataset.
-
-Steps:
-1. Generate synthetic dataset of complaints labelled as procedente/improcedente and channel.
-2. Pre‑process text (lowercase, remove accents, stopwords, lemmatize (optional)).
-3. Exploratory word clouds for each subset.
-4. Sentence embeddings (paraphrase-multilingual-MiniLM-L12-v2) and clustering with UMAP + HDBSCAN.
-5. Visualize clusters.
-6. Build logistic regression classifier on TF‑IDF to predict procedente.
-7. Explain model with SHAP.
-
-Requirements (pip install):
-  pandas numpy scikit-learn nltk wordcloud sentence-transformers umap-learn hdbscan shap matplotlib
-"""
-
-import random
-import re
-import unicodedata
+#!/usr/bin/env python
+# ───────────────────────────────────────────────────────────────────────────────
+# keyness_analysis.py
+#
+# Calcula estatísticas de “keyness” (χ², G‑test e log₂‑ratio) para duas listas
+# de contagem de palavras/n‑grams em corpora distintos (ex.: procedente vs.
+# improcedente).  100 % livre de modelos pré‑treinados.
+#
+# Entradas
+#   • procedentes.csv      (colunas: word,count)
+#   • improcedentes.csv    (colunas: word,count)
+#
+# Saídas
+#   • keyness_results.csv  (tabela completa, ordenada por χ² assinado)
+#
+# Uso rápido
+#   $ python keyness_analysis.py procedentes.csv improcedentes.csv \
+#       --min-freq 5 --top 50
+# ───────────────────────────────────────────────────────────────────────────────
+import argparse
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import shap
-import umap.umap_ as umap
-from hdbscan import HDBSCAN
-from sentence_transformers import SentenceTransformer
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.model_selection import train_test_split
-from wordcloud import WordCloud
+from scipy.stats import chi2
+from statsmodels.stats.multitest import multipletests
 
-# 1. Synthetic dataset -------------------------------------------------------
-random.seed(42)
-N_SAMPLES = 300
-
-PROCEDENTE_PHRASES = [
-    "Cobrança de tarifa indevida no cartão de crédito",
-    "Débito não reconhecido em conta corrente",
-    "Falha na transferência via PIX",
-    "Empréstimo consignado não autorizado",
-    "Seguro cobrado sem contratação",
-    "Fraude em boleto bancário",
-]
-IMPROCEDENTE_PHRASES = [
-    "Solicitação de aumento de limite negada",
-    "Reclamação sobre taxa de juros padrão",
-    "Demora no atendimento telefônico",
-    "Cartão não aprovado pela análise de crédito",
-    "Contestação de score negativado",
-    "Reversão de pagamento agendado",
-]
-VAZAMENTO_PHRASES = [
-    "Dados pessoais expostos em link público",
-    "Envio de fatura para e‑mail incorreto",
-    "SMS contendo CPF enviado a terceiros",
-]
-
-NOISE = [
-    "",
-    "",
-    " Cliente insatisfeito.",
-    " Situação recorrente.",
-    " Preciso de solução urgente.",
-]
-
-def random_complaint(label: str) -> str:
-    if label == "procedente":
-        base = random.choice(PROCEDENTE_PHRASES)
-    elif label == "improcedente":
-        base = random.choice(IMPROCEDENTE_PHRASES)
-    else:
-        base = random.choice(VAZAMENTO_PHRASES)
-    return f"{base}{random.choice(NOISE)}"
-
-rows = []
-for _ in range(N_SAMPLES):
-    lbl = random.choices(
-        ["procedente", "improcedente", "vazamento"], weights=[0.45, 0.45, 0.10]
-    )[0]
-    rows.append({"texto": random_complaint(lbl), "status": lbl})
-
-df = pd.DataFrame(rows)
-print("Amostra do dataset:")
-print(df.head())
-
-# 2. Pre‑processing ----------------------------------------------------------
-import nltk
-nltk.download("stopwords", quiet=True)
-from nltk.corpus import stopwords
-
-STOPWORDS_PT = set(stopwords.words("portuguese"))
+# ───────────────────────────────────────────────────────────────────────────────
+# Funções utilitárias
+# ───────────────────────────────────────────────────────────────────────────────
+def read_counts(path: Path, label: str) -> pd.DataFrame:
+    """Lê CSV no formato word,count e devolve DataFrame normalizado."""
+    df = pd.read_csv(path)
+    if not {"word", "count"} <= set(df.columns):
+        raise ValueError(f"{path.name} deve ter colunas 'word' e 'count'.")
+    return df.rename(columns={"count": f"freq_{label}"}).set_index("word")
 
 
-def preprocess(text: str) -> str:
-    text = text.lower().strip()
-    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("utf-8")
-    tokens = re.findall(r"\b\w+\b", text)
-    tokens = [tok for tok in tokens if tok not in STOPWORDS_PT and len(tok) > 2]
-    return " ".join(tokens)
+def merge_corpora(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
+    """Outer‑join para obter todas as palavras nos dois corpora."""
+    return (
+        df_a.join(df_b, how="outer")
+        .fillna(0)
+        .astype(int)
+        .reset_index()
+        .rename_axis(None, axis=1)
+    )
 
-df["texto_pp"] = df["texto"].apply(preprocess)
 
-# 3. WordClouds --------------------------------------------------------------
+def compute_keyness(
+    df: pd.DataFrame,
+    label_a: str = "proc",
+    label_b: str = "impr",
+    min_freq: int = 5,
+) -> pd.DataFrame:
+    """Adiciona colunas de keyness (χ² assinado, G‑test, log₂‑ratio, p‑ajustada)."""
+    # Totais de tokens em cada corpus
+    N_a = df[f"freq_{label_a}"].sum()
+    N_b = df[f"freq_{label_b}"].sum()
 
-def plot_wordcloud(texts, title):
-    wc = WordCloud(width=600, height=400, background_color="white")
-    wc.generate(" ".join(texts))
-    plt.figure(figsize=(6, 4))
-    plt.imshow(wc, interpolation="bilinear")
-    plt.axis("off")
-    plt.title(title, fontsize=14)
-    plt.show()
+    # Filtro de frequência mínima
+    freq_total = df[f"freq_{label_a}"] + df[f"freq_{label_b}"]
+    df = df[freq_total >= min_freq].copy()
 
-plot_wordcloud(df["texto_pp"], "WordCloud - Base completa")
-for subset_label in df["status"].unique():
-    plot_wordcloud(df[df["status"] == subset_label]["texto_pp"], f"WordCloud - {subset_label}")
+    # Contagens observadas
+    O11 = df[f"freq_{label_a}"].to_numpy()
+    O12 = df[f"freq_{label_b}"].to_numpy()
+    O21 = N_a - O11
+    O22 = N_b - O12
 
-# 4. Embeddings + Clustering -------------------------------------------------
-print("\nGerando embeddings... isto pode levar alguns segundos/minutos.")
-model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
-embeddings = model.encode(df["texto_pp"], show_progress_bar=True)
+    # χ² vectorizado (1 g.l.)
+    chisq = ((O11 * O22 - O12 * O21) ** 2 * (N_a + N_b)) / (
+        (O11 + O12) * (O21 + O22) * (O11 + O21) * (O12 + O22)
+    )
 
-reducer = umap.UMAP(n_neighbors=15, min_dist=0.0, metric="cosine", random_state=42)
-emb_umap = reducer.fit_transform(embeddings)
+    # Log‑likelihood ratio (G‑test)
+    eps = 1e-12  # evita log(0)
+    g2 = 2 * (
+        O11 * np.log(((O11 + eps) * (N_a + N_b)) / ((O11 + O12) * N_a + eps))
+        + O12 * np.log(((O12 + eps) * (N_a + N_b)) / ((O11 + O12) * N_b + eps))
+        + O21 * np.log(((O21 + eps) * (N_a + N_b)) / ((O21 + O22) * N_a + eps))
+        + O22 * np.log(((O22 + eps) * (N_a + N_b)) / ((O21 + O22) * N_b + eps))
+    )
 
-clusterer = HDBSCAN(min_cluster_size=5, metric="euclidean")
-cluster_labels = clusterer.fit_predict(emb_umap)
+    # Log₂‑ratio do efeito
+    ratio = (O11 / N_a) / (O12 / N_b + eps)
+    log2_ratio = np.log2(ratio + eps)
 
-df["cluster"] = cluster_labels
+    # Sinais (positivo → mais comum em A / procedente; negativo → em B / improcedente)
+    signed_chisq = np.where(ratio > 1, chisq, -chisq)
+    signed_g2 = np.where(ratio > 1, g2, -g2)
 
-plt.figure(figsize=(8, 6))
-scatter = plt.scatter(
-    emb_umap[:, 0], emb_umap[:, 1], c=cluster_labels, s=30, cmap="tab10", alpha=0.8
-)
-plt.colorbar(scatter, label="Cluster ID")
-plt.title("Clusters de reclamações (UMAP + HDBSCAN)")
-plt.xlabel("UMAP‑1")
-plt.ylabel("UMAP‑2")
-plt.tight_layout()
-plt.show()
+    # p‑values e FDR Benjamini–Hochberg
+    p_chi = chi2.sf(np.abs(chisq), df=1)
+    p_adj = multipletests(p_chi, method="fdr_bh")[1]
 
-# 5. Similaridade e deduplicação -------------------------------------------
-sim_matrix = cosine_similarity(embeddings)
-threshold = 0.85
-potential_dupes = np.argwhere(np.triu(sim_matrix, k=1) > threshold)
-print(f"Pares de reclamações quase duplicadas (sim > {threshold}): {len(potential_dupes)}")
+    df["chi2_signed"] = signed_chisq
+    df["g2_signed"] = signed_g2
+    df["log2_ratio"] = log2_ratio
+    df["p_adj"] = p_adj
 
-# 6. Classificador procedente vs improcedente -------------------------------
-binary_df = df[df["status"].isin(["procedente", "improcedente"])]
-y = binary_df["status"].map({"procedente": 1, "improcedente": 0}).values
-X_text = binary_df["texto_pp"]
+    return df.sort_values("chi2_signed", ascending=False).reset_index(drop=True)
 
-vectorizer = TfidfVectorizer(max_features=3000, ngram_range=(1, 2))
-X = vectorizer.fit_transform(X_text)
 
-X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.25, stratify=y, random_state=42
-)
+# ───────────────────────────────────────────────────────────────────────────────
+# Execução por linha de comando
+# ───────────────────────────────────────────────────────────────────────────────
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Calcula estatísticas de keyness entre dois corpora."
+    )
+    parser.add_argument("proc_csv", type=Path, help="CSV com word,count dos procedentes")
+    parser.add_argument(
+        "impr_csv", type=Path, help="CSV com word,count dos improcedentes"
+    )
+    parser.add_argument(
+        "--min-freq",
+        type=int,
+        default=5,
+        help="Frequência mínima total para entrar no cálculo (padrão = 5)",
+    )
+    parser.add_argument(
+        "--top",
+        type=int,
+        default=None,
+        help="Número de linhas do topo para salvar no CSV (por padrão salva todas)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("keyness_results.csv"),
+        help="Arquivo de saída (CSV)",
+    )
+    args = parser.parse_args()
 
-clf = LogisticRegression(max_iter=1000)
-clf.fit(X_train, y_train)
-print("\nRelatório de classificação (procedente=1, improcedente=0):")
-print(classification_report(y_test, clf.predict(X_test)))
+    # 1) Ler contagens
+    df_proc = read_counts(args.proc_csv, "proc")
+    df_impr = read_counts(args.impr_csv, "impr")
 
-# 7. Explicabilidade com SHAP ----------------------------------------------
-print("\nGerando explicações SHAP...")
-explainer = shap.LinearExplainer(clf, X_train, feature_dependence="independent")
-shap_values = explainer.shap_values(X_test)
-shap.summary_plot(
-    shap_values,
-    features=X_test,
-    feature_names=vectorizer.get_feature_names_out(),
-    show=False,
-)
-plt.title("SHAP resumo - tokens mais influentes")
-plt.show()
+    # 2) Mesclar corpora
+    all_words = merge_corpora(df_proc, df_impr)
 
-# 8. Exportar resultados ----------------------------------------------------
-output_dir = Path("outputs")
-output_dir.mkdir(exist_ok=True)
+    # 3) Calcular keyness
+    key_df = compute_keyness(all_words, min_freq=args.min_freq)
 
-df.to_csv(output_dir / "bacen_sintetico.csv", index=False)
-print(f"\nBase sintética salva em: {output_dir / 'bacen_sintetico.csv'}")
+    # 4) Salvar
+    output_df = key_df.head(args.top) if args.top else key_df
+    output_df.to_csv(args.output, index=False)
+    print(f"✓ Resultados salvos em: {args.output.resolve()}")
+
+
+if __name__ == "__main__":
+    main()
