@@ -1,153 +1,88 @@
-#!/usr/bin/env python
-# ───────────────────────────────────────────────────────────────────────────────
-# keyness_analysis.py
-#
-# Calcula estatísticas de “keyness” (χ², G‑test e log₂‑ratio) para duas listas
-# de contagem de palavras/n‑grams em corpora distintos (ex.: procedente vs.
-# improcedente).  100 % livre de modelos pré‑treinados.
-#
-# Entradas
-#   • procedentes.csv      (colunas: word,count)
-#   • improcedentes.csv    (colunas: word,count)
-#
-# Saídas
-#   • keyness_results.csv  (tabela completa, ordenada por χ² assinado)
-#
-# Uso rápido
-#   $ python keyness_analysis.py procedentes.csv improcedentes.csv \
-#       --min-freq 5 --top 50
-# ───────────────────────────────────────────────────────────────────────────────
-import argparse
-from pathlib import Path
+"""Feature engineering pipeline using functions only (no classes). Author: ChatGPT – 2025-05-16 """
 
-import numpy as np
-import pandas as pd
-from scipy.stats import chi2
-from statsmodels.stats.multitest import multipletests
+import re import numpy as np import pandas as pd import nltk from nltk.tokenize import sent_tokenize, word_tokenize from nltk.corpus import stopwords from spellchecker import SpellChecker import textstat import spacy from sklearn.feature_extraction.text import TfidfVectorizer from sklearn.linear_model import LogisticRegression from sklearn.pipeline import Pipeline from sklearn.compose import ColumnTransformer from sklearn.preprocessing import FunctionTransformer, StandardScaler from sklearn.decomposition import PCA from gensim.models.fasttext import load_facebook_vectors from sentence_transformers import SentenceTransformer
 
-# ───────────────────────────────────────────────────────────────────────────────
-# Funções utilitárias
-# ───────────────────────────────────────────────────────────────────────────────
-def read_counts(path: Path, label: str) -> pd.DataFrame:
-    """Lê CSV no formato word,count e devolve DataFrame normalizado."""
-    df = pd.read_csv(path)
-    if not {"word", "count"} <= set(df.columns):
-        raise ValueError(f"{path.name} deve ter colunas 'word' e 'count'.")
-    return df.rename(columns={"count": f"freq_{label}"}).set_index("word")
+nltk.download("punkt", quiet=True) nltk.download("stopwords", quiet=True)
 
+Global resources
 
-def merge_corpora(df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
-    """Outer‑join para obter todas as palavras nos dois corpora."""
-    return (
-        df_a.join(df_b, how="outer")
-        .fillna(0)
-        .astype(int)
-        .reset_index()
-        .rename_axis(None, axis=1)
-    )
+stopwords_pt = set(stopwords.words("portuguese")) spell = SpellChecker(language="pt") try: nlp = spacy.load("pt_core_news_sm", exclude=["parser", "ner"], disable=["parser", "ner"]) except OSError: nlp = spacy.blank("pt")
 
+fasttext_model = load_facebook_vectors("cc.pt.300.bin") sbert_model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
 
-def compute_keyness(
-    df: pd.DataFrame,
-    label_a: str = "proc",
-    label_b: str = "impr",
-    min_freq: int = 5,
-) -> pd.DataFrame:
-    """Adiciona colunas de keyness (χ² assinado, G‑test, log₂‑ratio, p‑ajustada)."""
-    # Totais de tokens em cada corpus
-    N_a = df[f"freq_{label_a}"].sum()
-    N_b = df[f"freq_{label_b}"].sum()
+--- Feature extractors as functions ---
 
-    # Filtro de frequência mínima
-    freq_total = df[f"freq_{label_a}"] + df[f"freq_{label_b}"]
-    df = df[freq_total >= min_freq].copy()
+def extract_text_stats(texts): keyword_dict = { "causa": ["causa", "motivo", "origem"], "solucao": ["solução", "resolver", "correção", "ajuste"], "prazo": ["prazo", "até", "data", "deadline"], } features = [] for text in texts: text = text if isinstance(text, str) else "" words = word_tokenize(text.lower(), language="portuguese") sentences = sent_tokenize(text, language="portuguese")
 
-    # Contagens observadas
-    O11 = df[f"freq_{label_a}"].to_numpy()
-    O12 = df[f"freq_{label_b}"].to_numpy()
-    O21 = N_a - O11
-    O22 = N_b - O12
+chars = len(text)
+    num_words = len(words)
+    num_sentences = len(sentences)
+    avg_word_len = np.mean([len(w) for w in words]) if words else 0.0
+    avg_words_per_sentence = num_words / num_sentences if num_sentences else 0.0
+    lexical_diversity = len(set(words)) / num_words if num_words else 0.0
 
-    # χ² vectorizado (1 g.l.)
-    chisq = ((O11 * O22 - O12 * O21) ** 2 * (N_a + N_b)) / (
-        (O11 + O12) * (O21 + O22) * (O11 + O21) * (O12 + O22)
-    )
+    colon_ct = text.count(":")
+    dash_ct = text.count("–") + text.count("-")
+    qmark_ct = text.count("?")
+    line_breaks = text.count("\n")
+    list_markers = len(re.findall(r"(?:^|\n)[\-\•\*]\s", text))
+    uppercase_ratio = sum(1 for c in text if c.isupper()) / chars if chars else 0.0
 
-    # Log‑likelihood ratio (G‑test)
-    eps = 1e-12  # evita log(0)
-    g2 = 2 * (
-        O11 * np.log(((O11 + eps) * (N_a + N_b)) / ((O11 + O12) * N_a + eps))
-        + O12 * np.log(((O12 + eps) * (N_a + N_b)) / ((O11 + O12) * N_b + eps))
-        + O21 * np.log(((O21 + eps) * (N_a + N_b)) / ((O21 + O22) * N_a + eps))
-        + O22 * np.log(((O22 + eps) * (N_a + N_b)) / ((O21 + O22) * N_b + eps))
-    )
+    stopword_ratio = sum(1 for w in words if w in stopwords_pt) / num_words if num_words else 0.0
+    spelling_errors = len(spell.unknown(words))
+    readability = textstat.gulpease_index(text) if num_words > 10 else 0.0
 
-    # Log₂‑ratio do efeito
-    ratio = (O11 / N_a) / (O12 / N_b + eps)
-    log2_ratio = np.log2(ratio + eps)
+    has_date = int(bool(re.search(r"\d{2}/\d{2}/\d{4}", text)))
+    has_relative_time = int(bool(re.search(r"\b(hoje|amanh[ãa]|depois de amanhã|em \d+ dias)\b", text, re.IGNORECASE)))
 
-    # Sinais (positivo → mais comum em A / procedente; negativo → em B / improcedente)
-    signed_chisq = np.where(ratio > 1, chisq, -chisq)
-    signed_g2 = np.where(ratio > 1, g2, -g2)
+    keyword_flags = [int(any(kw in text.lower() for kw in kw_list)) for kw_list in keyword_dict.values()]
 
-    # p‑values e FDR Benjamini–Hochberg
-    p_chi = chi2.sf(np.abs(chisq), df=1)
-    p_adj = multipletests(p_chi, method="fdr_bh")[1]
+    doc = nlp(text)
+    num_verbs = len([t for t in doc if t.pos_ == "VERB"])
+    num_nouns = len([t for t in doc if t.pos_ == "NOUN"])
+    num_pron1 = len([t for t in doc if t.pos_ == "PRON" and t.text.lower() in {"eu", "meu", "minha"}])
+    num_pron3 = len([t for t in doc if t.pos_ == "PRON" and t.text.lower() in {"ela", "ele", "cliente", "o cliente"}])
+    pos_total = num_verbs + num_nouns if (num_verbs + num_nouns) else 1
+    verb_ratio = num_verbs / pos_total
+    noun_ratio = num_nouns / pos_total
+    pron_ratio = (num_pron1 + num_pron3) / max(1, len(doc))
 
-    df["chi2_signed"] = signed_chisq
-    df["g2_signed"] = signed_g2
-    df["log2_ratio"] = log2_ratio
-    df["p_adj"] = p_adj
+    features.append([
+        chars, num_words, num_sentences, avg_word_len, avg_words_per_sentence, lexical_diversity,
+        colon_ct, dash_ct, qmark_ct, line_breaks, list_markers, uppercase_ratio,
+        stopword_ratio, spelling_errors, readability,
+        has_date, has_relative_time, *keyword_flags,
+        verb_ratio, noun_ratio, pron_ratio
+    ])
+return np.array(features, dtype=float)
 
-    return df.sort_values("chi2_signed", ascending=False).reset_index(drop=True)
+def fasttext_vectors(texts): vectors = [] for text in texts: words = [w for w in word_tokenize(text.lower()) if w in fasttext_model] if not words: vectors.append(np.zeros(fasttext_model.vector_size)) else: vectors.append(np.mean(fasttext_model[words], axis=0)) return PCA(n_components=50).fit_transform(vectors)
 
+def sbert_vectors(texts): emb = sbert_model.encode(texts, show_progress_bar=False) return PCA(n_components=50).fit_transform(emb)
 
-# ───────────────────────────────────────────────────────────────────────────────
-# Execução por linha de comando
-# ───────────────────────────────────────────────────────────────────────────────
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Calcula estatísticas de keyness entre dois corpora."
-    )
-    parser.add_argument("proc_csv", type=Path, help="CSV com word,count dos procedentes")
-    parser.add_argument(
-        "impr_csv", type=Path, help="CSV com word,count dos improcedentes"
-    )
-    parser.add_argument(
-        "--min-freq",
-        type=int,
-        default=5,
-        help="Frequência mínima total para entrar no cálculo (padrão = 5)",
-    )
-    parser.add_argument(
-        "--top",
-        type=int,
-        default=None,
-        help="Número de linhas do topo para salvar no CSV (por padrão salva todas)",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=Path("keyness_results.csv"),
-        help="Arquivo de saída (CSV)",
-    )
-    args = parser.parse_args()
+--- Pipeline constructor ---
 
-    # 1) Ler contagens
-    df_proc = read_counts(args.proc_csv, "proc")
-    df_impr = read_counts(args.impr_csv, "impr")
+def build_pipeline(): tfidf = TfidfVectorizer(ngram_range=(1, 3), max_features=20000, min_df=3, stop_words="portuguese") stats_func = FunctionTransformer(extract_text_stats, validate=False) fasttext_func = FunctionTransformer(fasttext_vectors, validate=False) sbert_func = FunctionTransformer(sbert_vectors, validate=False)
 
-    # 2) Mesclar corpora
-    all_words = merge_corpora(df_proc, df_impr)
+preproc = ColumnTransformer([
+    ("tfidf", tfidf, "texto"),
+    ("stats", stats_func, "texto"),
+    ("fasttext", fasttext_func, "texto"),
+    ("sbert", sbert_func, "texto")
+])
 
-    # 3) Calcular keyness
-    key_df = compute_keyness(all_words, min_freq=args.min_freq)
+pipeline = Pipeline([
+    ("preproc", preproc),
+    ("scale", StandardScaler(with_mean=False)),
+    ("clf", LogisticRegression(max_iter=200, class_weight="balanced"))
+])
+return pipeline
 
-    # 4) Salvar
-    output_df = key_df.head(args.top) if args.top else key_df
-    output_df.to_csv(args.output, index=False)
-    print(f"✓ Resultados salvos em: {args.output.resolve()}")
+--- Example ---
 
+if name == "main": data = pd.DataFrame({ "texto": [ "Cliente relatou erro no sistema. Causa identificada. Solução será aplicada até 20/05/2025.", "Verificar." ], "target": [1, 0] })
 
-if __name__ == "__main__":
-    main()
+pipeline = build_pipeline()
+pipeline.fit(data["texto"], data["target"])
+preds = pipeline.predict(data["texto"])
+print("Predições:", preds)
