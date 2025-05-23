@@ -1,88 +1,115 @@
-"""Feature engineering pipeline using functions only (no classes). Author: ChatGPT – 2025-05-16 """
+## Combinação de Vetorizadores
+### TF-IDF com outras representações
 
-import re import numpy as np import pandas as pd import nltk from nltk.tokenize import sent_tokenize, word_tokenize from nltk.corpus import stopwords from spellchecker import SpellChecker import textstat import spacy from sklearn.feature_extraction.text import TfidfVectorizer from sklearn.linear_model import LogisticRegression from sklearn.pipeline import Pipeline from sklearn.compose import ColumnTransformer from sklearn.preprocessing import FunctionTransformer, StandardScaler from sklearn.decomposition import PCA from gensim.models.fasttext import load_facebook_vectors from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import FeatureUnion
 
-nltk.download("punkt", quiet=True) nltk.download("stopwords", quiet=True)
-
-Global resources
-
-stopwords_pt = set(stopwords.words("portuguese")) spell = SpellChecker(language="pt") try: nlp = spacy.load("pt_core_news_sm", exclude=["parser", "ner"], disable=["parser", "ner"]) except OSError: nlp = spacy.blank("pt")
-
-fasttext_model = load_facebook_vectors("cc.pt.300.bin") sbert_model = SentenceTransformer("sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2")
-
---- Feature extractors as functions ---
-
-def extract_text_stats(texts): keyword_dict = { "causa": ["causa", "motivo", "origem"], "solucao": ["solução", "resolver", "correção", "ajuste"], "prazo": ["prazo", "até", "data", "deadline"], } features = [] for text in texts: text = text if isinstance(text, str) else "" words = word_tokenize(text.lower(), language="portuguese") sentences = sent_tokenize(text, language="portuguese")
-
-chars = len(text)
-    num_words = len(words)
-    num_sentences = len(sentences)
-    avg_word_len = np.mean([len(w) for w in words]) if words else 0.0
-    avg_words_per_sentence = num_words / num_sentences if num_sentences else 0.0
-    lexical_diversity = len(set(words)) / num_words if num_words else 0.0
-
-    colon_ct = text.count(":")
-    dash_ct = text.count("–") + text.count("-")
-    qmark_ct = text.count("?")
-    line_breaks = text.count("\n")
-    list_markers = len(re.findall(r"(?:^|\n)[\-\•\*]\s", text))
-    uppercase_ratio = sum(1 for c in text if c.isupper()) / chars if chars else 0.0
-
-    stopword_ratio = sum(1 for w in words if w in stopwords_pt) / num_words if num_words else 0.0
-    spelling_errors = len(spell.unknown(words))
-    readability = textstat.gulpease_index(text) if num_words > 10 else 0.0
-
-    has_date = int(bool(re.search(r"\d{2}/\d{2}/\d{4}", text)))
-    has_relative_time = int(bool(re.search(r"\b(hoje|amanh[ãa]|depois de amanhã|em \d+ dias)\b", text, re.IGNORECASE)))
-
-    keyword_flags = [int(any(kw in text.lower() for kw in kw_list)) for kw_list in keyword_dict.values()]
-
-    doc = nlp(text)
-    num_verbs = len([t for t in doc if t.pos_ == "VERB"])
-    num_nouns = len([t for t in doc if t.pos_ == "NOUN"])
-    num_pron1 = len([t for t in doc if t.pos_ == "PRON" and t.text.lower() in {"eu", "meu", "minha"}])
-    num_pron3 = len([t for t in doc if t.pos_ == "PRON" and t.text.lower() in {"ela", "ele", "cliente", "o cliente"}])
-    pos_total = num_verbs + num_nouns if (num_verbs + num_nouns) else 1
-    verb_ratio = num_verbs / pos_total
-    noun_ratio = num_nouns / pos_total
-    pron_ratio = (num_pron1 + num_pron3) / max(1, len(doc))
-
-    features.append([
-        chars, num_words, num_sentences, avg_word_len, avg_words_per_sentence, lexical_diversity,
-        colon_ct, dash_ct, qmark_ct, line_breaks, list_markers, uppercase_ratio,
-        stopword_ratio, spelling_errors, readability,
-        has_date, has_relative_time, *keyword_flags,
-        verb_ratio, noun_ratio, pron_ratio
-    ])
-return np.array(features, dtype=float)
-
-def fasttext_vectors(texts): vectors = [] for text in texts: words = [w for w in word_tokenize(text.lower()) if w in fasttext_model] if not words: vectors.append(np.zeros(fasttext_model.vector_size)) else: vectors.append(np.mean(fasttext_model[words], axis=0)) return PCA(n_components=50).fit_transform(vectors)
-
-def sbert_vectors(texts): emb = sbert_model.encode(texts, show_progress_bar=False) return PCA(n_components=50).fit_transform(emb)
-
---- Pipeline constructor ---
-
-def build_pipeline(): tfidf = TfidfVectorizer(ngram_range=(1, 3), max_features=20000, min_df=3, stop_words="portuguese") stats_func = FunctionTransformer(extract_text_stats, validate=False) fasttext_func = FunctionTransformer(fasttext_vectors, validate=False) sbert_func = FunctionTransformer(sbert_vectors, validate=False)
-
-preproc = ColumnTransformer([
-    ("tfidf", tfidf, "texto"),
-    ("stats", stats_func, "texto"),
-    ("fasttext", fasttext_func, "texto"),
-    ("sbert", sbert_func, "texto")
+# Combinação de diferentes vetorizadores
+vectorizer_combo = FeatureUnion([
+    ('tfidf_words', TfidfVectorizer(ngram_range=(1,2), max_features=3000)),
+    ('tfidf_chars', TfidfVectorizer(analyzer='char', ngram_range=(2,4), max_features=2000)),
+    ('count_vec', CountVectorizer(ngram_range=(1,1), max_features=1000, binary=True))
 ])
 
-pipeline = Pipeline([
-    ("preproc", preproc),
-    ("scale", StandardScaler(with_mean=False)),
-    ("clf", LogisticRegression(max_iter=200, class_weight="balanced"))
-])
-return pipeline
 
---- Example ---
+## Modelos Mais Sofisticados
+### Ensemble
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import VotingClassifier
+from xgboost import XGBClassifier
 
-if name == "main": data = pd.DataFrame({ "texto": [ "Cliente relatou erro no sistema. Causa identificada. Solução será aplicada até 20/05/2025.", "Verificar." ], "target": [1, 0] })
+# Ensemble de modelos
+rf = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
+xgb = XGBClassifier(n_estimators=200, max_depth=6, learning_rate=0.1, random_state=42)
+lr = LogisticRegression(**seus_melhores_params)
 
-pipeline = build_pipeline()
-pipeline.fit(data["texto"], data["target"])
-preds = pipeline.predict(data["texto"])
-print("Predições:", preds)
+ensemble = VotingClassifier([
+    ('lr', lr),
+    ('rf', rf),
+    ('xgb', xgb)
+], voting='soft')
+
+
+### Stacking
+from sklearn.ensemble import StackingClassifier
+
+stacking_model = StackingClassifier(
+    estimators=[
+        ('lr', LogisticRegression(**seus_params)),
+        ('rf', RandomForestClassifier(n_estimators=100)),
+        ('xgb', XGBClassifier(n_estimators=100))
+    ],
+    final_estimator=LogisticRegression(),
+    cv=5
+)
+
+## Otimização de Threshold
+from sklearn.metrics import precision_recall_curve
+
+def optimize_threshold(y_true, y_proba):
+    precision, recall, thresholds = precision_recall_curve(y_true, y_proba)
+    f1_scores = 2 * (precision * recall) / (precision + recall)
+    best_threshold = thresholds[np.argmax(f1_scores)]
+    return best_threshold
+
+# Após treinar o modelo
+y_proba = model.predict_proba(X_test)[:, 1]
+optimal_threshold = optimize_threshold(y_test, y_proba)
+y_pred_optimized = (y_proba >= optimal_threshold).astype(int)
+
+## Validação mais robusta
+from sklearn.model_selection import StratifiedKFold, cross_validate
+
+# Cross-validation mais robusta
+cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+scoring = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc']
+
+cv_results = cross_validate(pipeline, X, y, cv=cv, scoring=scoring)
+
+## Análise de erros
+# Análise dos casos mal classificados
+wrong_predictions = X_test[y_test != y_pred]
+wrong_labels = y_test[y_test != y_pred]
+
+# Examine exemplos específicos
+false_positives = X_test[(y_test == 0) & (y_pred == 1)]
+false_negatives = X_test[(y_test == 1) & (y_pred == 0)]
+
+## EXEMPLO DE PIPELINE MELHORADO (EMBEDDINGS + XGBOOST)
+from sentence_transformers import SentenceTransformer
+from xgboost import XGBClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import f1_score
+
+model = SentenceTransformer('all-MiniLM-L12-v2')
+X = model.encode(df['texto'].tolist())
+y = df['label'].values
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2)
+
+clf = XGBClassifier(scale_pos_weight=len(y_train[y_train==0])/len(y_train[y_train==1]))
+clf.fit(X_train, y_train)
+preds = clf.predict(X_test)
+
+print("F1 Score:", f1_score(y_test, preds))
+
+## 3. ANÁLISE DOS ERROS (CONFUSÃO LOCAL)
+### Extraia os falsos negativos e falsos positivos.
+
+### Clusterize com UMAP + HDBSCAN para entender padrões nos erros.
+
+### Pode descobrir que há padrões semânticos ou estruturais que passam despercebidos pelo TF-IDF.
+
+## TROQUE TF-IDF POR EMBEDDINGS DENSOS
+POR QUÊ: TF-IDF não entende semântica. Mesmo com n-grams, ele perde relações profundas.
+
+AÇÃO: Testar com embeddings pré-treinados:
+
+SentenceTransformer (paraphrase-MiniLM-L6-v2 ou all-MiniLM-L12-v2)
+
+spaCy vectors (pt_core_news_lg, se estiver em português)
+
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
+X_vectors = model.encode(texts)
