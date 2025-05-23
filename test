@@ -1,115 +1,84 @@
-## Combinação de Vetorizadores
-### TF-IDF com outras representações
+from pathlib import Path
+from datetime import datetime
+import shutil
+import pandas as pd
 
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.compose import ColumnTransformer
-from sklearn.pipeline import FeatureUnion
+# ─── PARAMETRIZAÇÃO ────────────────────────────────────────────────────────────
+BASE_DIR      = Path("ENVIADO_A_EMPRESA")            # pasta-raiz já existente
+COLETA_DIR    = BASE_DIR / "COLETA_ARQUIVOS"         # onde o .csv chega
+SATISF_DIR    = Path("ENVIAR_PESQUISA_SATISF")       # destino da cópia
+LOG_FILE      = BASE_DIR / "log_execucoes.xlsx"      # log em Excel
+# escolha aqui se quer 1 ou 2 níveis de subpastas ↓
+NIVEL_ANO_MES_COMPLETO = True      # 202505
+NIVEL_ANO_MES_CURTO    = True      # 2505
 
-# Combinação de diferentes vetorizadores
-vectorizer_combo = FeatureUnion([
-    ('tfidf_words', TfidfVectorizer(ngram_range=(1,2), max_features=3000)),
-    ('tfidf_chars', TfidfVectorizer(analyzer='char', ngram_range=(2,4), max_features=2000)),
-    ('count_vec', CountVectorizer(ngram_range=(1,1), max_features=1000, binary=True))
-])
+def escrever_log(msg:str) -> None:
+    """Registra a mensagem em LOG_FILE e imprime na saída."""
+    registro = {
+        "data_hora_execucao": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "log": msg
+    }
+    novo = pd.DataFrame([registro])
 
+    if LOG_FILE.exists():
+        antigo = pd.read_excel(LOG_FILE)
+        df = pd.concat([antigo, novo], ignore_index=True)
+    else:
+        df = novo
 
-## Modelos Mais Sofisticados
-### Ensemble
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.ensemble import VotingClassifier
-from xgboost import XGBClassifier
+    with pd.ExcelWriter(LOG_FILE, engine="openpyxl", mode="w") as wrt:
+        df.to_excel(wrt, index=False)
 
-# Ensemble de modelos
-rf = RandomForestClassifier(n_estimators=200, max_depth=10, random_state=42)
-xgb = XGBClassifier(n_estimators=200, max_depth=6, learning_rate=0.1, random_state=42)
-lr = LogisticRegression(**seus_melhores_params)
+    print(msg)                # feedback imediato no notebook
 
-ensemble = VotingClassifier([
-    ('lr', lr),
-    ('rf', rf),
-    ('xgb', xgb)
-], voting='soft')
+def criar_pasta_alvo(data_exec:datetime) -> Path:
+    """
+    Cria (caso necessário) e devolve o caminho da subpasta destino onde o .csv será
+    movido. Pode gerar um ou dois níveis, conforme as flags de parametrização.
+    Ex.: ENVIADO_A_EMPRESA/202505/2505
+    """
+    caminho = BASE_DIR
+    if NIVEL_ANO_MES_COMPLETO:
+        caminho = caminho / data_exec.strftime("%Y%m")
+    if NIVEL_ANO_MES_CURTO:
+        caminho = caminho / data_exec.strftime("%y%m")
 
+    if not caminho.exists():
+        caminho.mkdir(parents=True, exist_ok=True)
+        escrever_log(f"Pasta criada: {caminho}")
+    else:
+        escrever_log(f"Pasta já existia: {caminho}")
 
-### Stacking
-from sklearn.ensemble import StackingClassifier
+    return caminho
 
-stacking_model = StackingClassifier(
-    estimators=[
-        ('lr', LogisticRegression(**seus_params)),
-        ('rf', RandomForestClassifier(n_estimators=100)),
-        ('xgb', XGBClassifier(n_estimators=100))
-    ],
-    final_estimator=LogisticRegression(),
-    cv=5
-)
+def mover_e_copiar_csv_do_dia() -> None:
+    hoje = datetime.now()
+    sufixo = hoje.strftime("%Y_%m_%d")          # 'yyyy_mm_dd'
+    candidatos = list(COLETA_DIR.glob(f"*{sufixo}.csv"))
 
-## Otimização de Threshold
-from sklearn.metrics import precision_recall_curve
+    if not candidatos:
+        escrever_log(f"Nenhum .csv com sufixo {sufixo} encontrado em {COLETA_DIR}.")
+        return
 
-def optimize_threshold(y_true, y_proba):
-    precision, recall, thresholds = precision_recall_curve(y_true, y_proba)
-    f1_scores = 2 * (precision * recall) / (precision + recall)
-    best_threshold = thresholds[np.argmax(f1_scores)]
-    return best_threshold
+    destino_final = criar_pasta_alvo(hoje)      # cria/obtém pasta-alvo
 
-# Após treinar o modelo
-y_proba = model.predict_proba(X_test)[:, 1]
-optimal_threshold = optimize_threshold(y_test, y_proba)
-y_pred_optimized = (y_proba >= optimal_threshold).astype(int)
+    for csv in candidatos:
+        destino_arquivo = destino_final / csv.name
 
-## Validação mais robusta
-from sklearn.model_selection import StratifiedKFold, cross_validate
+        # ─── MOVER ────────────────────────────────────────────────────────────
+        if destino_arquivo.exists():
+            escrever_log(f"Arquivo já existente em {destino_final}: {csv.name} – não movido.")
+        else:
+            shutil.move(csv, destino_arquivo)
+            escrever_log(f"Movido {csv.name} → {destino_final}")
 
-# Cross-validation mais robusta
-cv = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
-scoring = ['accuracy', 'precision', 'recall', 'f1', 'roc_auc']
+        # ─── COPIAR PARA ENVIAR_PESQUISA_SATISF ──────────────────────────────
+        try:
+            SATISF_DIR.mkdir(parents=True, exist_ok=True)
+            copia = SATISF_DIR / csv.name
+            shutil.copy2(destino_arquivo, copia)
+            escrever_log(f"Cópia enviada para {SATISF_DIR}: {csv.name}")
+        except Exception as exc:
+            escrever_log(f"Erro ao copiar {csv.name} para {SATISF_DIR}: {exc}")
 
-cv_results = cross_validate(pipeline, X, y, cv=cv, scoring=scoring)
-
-## Análise de erros
-# Análise dos casos mal classificados
-wrong_predictions = X_test[y_test != y_pred]
-wrong_labels = y_test[y_test != y_pred]
-
-# Examine exemplos específicos
-false_positives = X_test[(y_test == 0) & (y_pred == 1)]
-false_negatives = X_test[(y_test == 1) & (y_pred == 0)]
-
-## EXEMPLO DE PIPELINE MELHORADO (EMBEDDINGS + XGBOOST)
-from sentence_transformers import SentenceTransformer
-from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import f1_score
-
-model = SentenceTransformer('all-MiniLM-L12-v2')
-X = model.encode(df['texto'].tolist())
-y = df['label'].values
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2)
-
-clf = XGBClassifier(scale_pos_weight=len(y_train[y_train==0])/len(y_train[y_train==1]))
-clf.fit(X_train, y_train)
-preds = clf.predict(X_test)
-
-print("F1 Score:", f1_score(y_test, preds))
-
-## 3. ANÁLISE DOS ERROS (CONFUSÃO LOCAL)
-### Extraia os falsos negativos e falsos positivos.
-
-### Clusterize com UMAP + HDBSCAN para entender padrões nos erros.
-
-### Pode descobrir que há padrões semânticos ou estruturais que passam despercebidos pelo TF-IDF.
-
-## TROQUE TF-IDF POR EMBEDDINGS DENSOS
-POR QUÊ: TF-IDF não entende semântica. Mesmo com n-grams, ele perde relações profundas.
-
-AÇÃO: Testar com embeddings pré-treinados:
-
-SentenceTransformer (paraphrase-MiniLM-L6-v2 ou all-MiniLM-L12-v2)
-
-spaCy vectors (pt_core_news_lg, se estiver em português)
-
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer('paraphrase-MiniLM-L6-v2')
-X_vectors = model.encode(texts)
+mover_e_copiar_csv_do_dia()
