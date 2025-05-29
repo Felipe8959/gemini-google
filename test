@@ -1,84 +1,73 @@
-from pathlib import Path
-from datetime import datetime
-import shutil
+import pandas as pd
+from datetime import datetime, timedelta
+
+# Supondo que df seja seu DataFrame
+hoje = pd.Timestamp.today().normalize()  # Apenas data, sem hora
+
+def aplicar_logica(row):
+    data_c = pd.to_datetime(row['C']).normalize()
+    m_val = row['M']
+    
+    if hoje.weekday() != 0 and m_val == "CARTA":  # weekday() 0 = segunda
+        if hoje - timedelta(days=10) == data_c:
+            return True
+        elif hoje - timedelta(days=1) == data_c and m_val != "CARTA":
+            return False
+    return None  # Ou outro valor default
+
+df['resultado'] = df.apply(aplicar_logica, axis=1)
+
+
+
+
+
+import pandas as pd
+from datetime import timedelta
+
+# Carregar dados (substitua pelo seu arquivo, se ainda não estiver carregado)
+df = pd.read_excel("/mnt/data/file-NcXVuyJuDPeQwuLr4Hp87E.xlsx")
+
+# Garantir que colunas estão no tipo correto
+df['C'] = pd.to_datetime(df['C'], errors='coerce')
+df['M'] = df['M'].astype(str)
+
+# Definir data de hoje
+hoje = pd.Timestamp.today().normalize()
+
+def aplicar_nova_logica(row):
+    data_c = row['C']
+    m_val = row['M']
+
+    # Se não for segunda-feira
+    if hoje.weekday() != 0:  # segunda = 0
+        return "-"
+
+    if m_val == "CARTA":
+        return (hoje - timedelta(days=9) > data_c) and (hoje - timedelta(days=13) < data_c)
+    else:
+        return (hoje - timedelta(days=3) <= data_c) and (m_val != "CARTA")
+
+# Aplicar no DataFrame
+df['resultado'] = df.apply(aplicar_nova_logica, axis=1)
+
+
+
+
+import pyodbc
 import pandas as pd
 
-# ─── PARAMETRIZAÇÃO ────────────────────────────────────────────────────────────
-BASE_DIR      = Path("ENVIADO_A_EMPRESA")            # pasta-raiz já existente
-COLETA_DIR    = BASE_DIR / "COLETA_ARQUIVOS"         # onde o .csv chega
-SATISF_DIR    = Path("ENVIAR_PESQUISA_SATISF")       # destino da cópia
-LOG_FILE      = BASE_DIR / "log_execucoes.xlsx"      # log em Excel
-# escolha aqui se quer 1 ou 2 níveis de subpastas ↓
-NIVEL_ANO_MES_COMPLETO = True      # 202505
-NIVEL_ANO_MES_CURTO    = True      # 2505
+# Caminho do arquivo .accdb
+caminho_banco = r"\\d4960s003\d4960_7\Compartilhado\Entre_Secoes\D4960S010\PESQUISA _SATISFACAO_0800_OUVIDORIA\BasePesquisa.accdb"
 
-def escrever_log(msg:str) -> None:
-    """Registra a mensagem em LOG_FILE e imprime na saída."""
-    registro = {
-        "data_hora_execucao": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "log": msg
-    }
-    novo = pd.DataFrame([registro])
+# String de conexão ODBC para Access
+conn_str = (
+    r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
+    rf"DBQ={caminho_banco};"
+)
 
-    if LOG_FILE.exists():
-        antigo = pd.read_excel(LOG_FILE)
-        df = pd.concat([antigo, novo], ignore_index=True)
-    else:
-        df = novo
+# Conectar e ler a tabela "avaliacao"
+with pyodbc.connect(conn_str) as conn:
+    df = pd.read_sql("SELECT * FROM avaliacao", conn)
 
-    with pd.ExcelWriter(LOG_FILE, engine="openpyxl", mode="w") as wrt:
-        df.to_excel(wrt, index=False)
-
-    print(msg)                # feedback imediato no notebook
-
-def criar_pasta_alvo(data_exec:datetime) -> Path:
-    """
-    Cria (caso necessário) e devolve o caminho da subpasta destino onde o .csv será
-    movido. Pode gerar um ou dois níveis, conforme as flags de parametrização.
-    Ex.: ENVIADO_A_EMPRESA/202505/2505
-    """
-    caminho = BASE_DIR
-    if NIVEL_ANO_MES_COMPLETO:
-        caminho = caminho / data_exec.strftime("%Y%m")
-    if NIVEL_ANO_MES_CURTO:
-        caminho = caminho / data_exec.strftime("%y%m")
-
-    if not caminho.exists():
-        caminho.mkdir(parents=True, exist_ok=True)
-        escrever_log(f"Pasta criada: {caminho}")
-    else:
-        escrever_log(f"Pasta já existia: {caminho}")
-
-    return caminho
-
-def mover_e_copiar_csv_do_dia() -> None:
-    hoje = datetime.now()
-    sufixo = hoje.strftime("%Y_%m_%d")          # 'yyyy_mm_dd'
-    candidatos = list(COLETA_DIR.glob(f"*{sufixo}.csv"))
-
-    if not candidatos:
-        escrever_log(f"Nenhum .csv com sufixo {sufixo} encontrado em {COLETA_DIR}.")
-        return
-
-    destino_final = criar_pasta_alvo(hoje)      # cria/obtém pasta-alvo
-
-    for csv in candidatos:
-        destino_arquivo = destino_final / csv.name
-
-        # ─── MOVER ────────────────────────────────────────────────────────────
-        if destino_arquivo.exists():
-            escrever_log(f"Arquivo já existente em {destino_final}: {csv.name} – não movido.")
-        else:
-            shutil.move(csv, destino_arquivo)
-            escrever_log(f"Movido {csv.name} → {destino_final}")
-
-        # ─── COPIAR PARA ENVIAR_PESQUISA_SATISF ──────────────────────────────
-        try:
-            SATISF_DIR.mkdir(parents=True, exist_ok=True)
-            copia = SATISF_DIR / csv.name
-            shutil.copy2(destino_arquivo, copia)
-            escrever_log(f"Cópia enviada para {SATISF_DIR}: {csv.name}")
-        except Exception as exc:
-            escrever_log(f"Erro ao copiar {csv.name} para {SATISF_DIR}: {exc}")
-
-mover_e_copiar_csv_do_dia()
+# Exibir amostra
+print(df.head())
