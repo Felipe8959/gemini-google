@@ -1,73 +1,31 @@
-import pandas as pd
-from datetime import datetime, timedelta
-
-# Supondo que df seja seu DataFrame
-hoje = pd.Timestamp.today().normalize()  # Apenas data, sem hora
-
-def aplicar_logica(row):
-    data_c = pd.to_datetime(row['C']).normalize()
-    m_val = row['M']
-    
-    if hoje.weekday() != 0 and m_val == "CARTA":  # weekday() 0 = segunda
-        if hoje - timedelta(days=10) == data_c:
-            return True
-        elif hoje - timedelta(days=1) == data_c and m_val != "CARTA":
-            return False
-    return None  # Ou outro valor default
-
-df['resultado'] = df.apply(aplicar_logica, axis=1)
-
-
-
-
-
-import pandas as pd
-from datetime import timedelta
-
-# Carregar dados (substitua pelo seu arquivo, se ainda não estiver carregado)
-df = pd.read_excel("/mnt/data/file-NcXVuyJuDPeQwuLr4Hp87E.xlsx")
-
-# Garantir que colunas estão no tipo correto
-df['C'] = pd.to_datetime(df['C'], errors='coerce')
-df['M'] = df['M'].astype(str)
-
-# Definir data de hoje
-hoje = pd.Timestamp.today().normalize()
-
-def aplicar_nova_logica(row):
-    data_c = row['C']
-    m_val = row['M']
-
-    # Se não for segunda-feira
-    if hoje.weekday() != 0:  # segunda = 0
-        return "-"
-
-    if m_val == "CARTA":
-        return (hoje - timedelta(days=9) > data_c) and (hoje - timedelta(days=13) < data_c)
-    else:
-        return (hoje - timedelta(days=3) <= data_c) and (m_val != "CARTA")
-
-# Aplicar no DataFrame
-df['resultado'] = df.apply(aplicar_nova_logica, axis=1)
-
-
-
-
-import pyodbc
-import pandas as pd
-
-# Caminho do arquivo .accdb
-caminho_banco = r"\\d4960s003\d4960_7\Compartilhado\Entre_Secoes\D4960S010\PESQUISA _SATISFACAO_0800_OUVIDORIA\BasePesquisa.accdb"
-
-# String de conexão ODBC para Access
-conn_str = (
-    r"DRIVER={Microsoft Access Driver (*.mdb, *.accdb)};"
-    rf"DBQ={caminho_banco};"
+WITH base_dados AS (
+    SELECT 
+        tipo_canal,
+        YEAR(dt_abertura_manif) AS ano,
+        MONTH(dt_abertura_manif) AS mes,
+        COUNT(*) AS total_mes_tipo
+    FROM monit_serv_publicos
+    GROUP BY tipo_canal, YEAR(dt_abertura_manif), MONTH(dt_abertura_manif)
+),
+total_geral_mes AS (
+    SELECT 
+        ano,
+        mes,
+        SUM(total_mes_tipo) AS total_mes
+    FROM base_dados
+    GROUP BY ano, mes
+),
+percentual_mensal AS (
+    SELECT 
+        b.ano,
+        b.mes,
+        b.tipo_canal,
+        b.total_mes_tipo,
+        t.total_mes,
+        ROUND(b.total_mes_tipo * 100.0 / t.total_mes, 2) AS percentual
+    FROM base_dados b
+    JOIN total_geral_mes t
+      ON b.ano = t.ano AND b.mes = t.mes
 )
 
-# Conectar e ler a tabela "avaliacao"
-with pyodbc.connect(conn_str) as conn:
-    df = pd.read_sql("SELECT * FROM avaliacao", conn)
-
-# Exibir amostra
-print(df.head())
+SELECT * FROM percentual_mensal;
