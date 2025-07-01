@@ -1,36 +1,21 @@
-import pandas as pd
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
+Foi feita entre 2h e 4h da manhã.
 
-# 1. Carregue sua base de dados
-df = pd.read_csv("reclamacoes.csv")  # Assuma que há uma coluna 'texto'
-textos = df["texto"].astype(str).tolist()
+O texto contém "pix que não fiz".
 
-# 2. Transforme os textos em embeddings
-model = SentenceTransformer("paraphrase-MiniLM-L6-v2")
-embeddings = model.encode(textos, show_progress_bar=True)
+O CPF já fez 5 reclamações similares nos últimos 10 dias.
 
-# 3. Calcule a matriz de similaridade entre todos os textos
-sim_matrix = cosine_similarity(embeddings)
+O IP de acesso está listado em uma blacklist.
 
-# 4. Para cada texto, conte quantos outros têm similaridade > 0.9
-threshold = 0.9
-similaridade_alta = (sim_matrix > threshold).astype(int)
+Mudanças bruscas em canais usados (ex: só usava app, e agora só SAC).
 
-# Desconta a similaridade com ele mesmo (valor 1 na diagonal)
-np.fill_diagonal(similaridade_alta, 0)
-contagem_similares = similaridade_alta.sum(axis=1)
+Se o cliente fez múltiplas reclamações do mesmo tipo em curto período.
 
-# 5. Normalize para probabilidade (quanto mais similares, maior chance de ser influenciado)
-probabilidades = contagem_similares / contagem_similares.max()
+Reclamações que envolvem valores altos com pouca comprovação.
 
-# 6. Salve ou insira na base
-df["probabilidade_influencer"] = probabilidades
+Usuários que alteram frequentemente dados cadastrais (telefone, e-mail, etc.).
 
-# 7. Visualize os suspeitos
-suspeitos = df[df["probabilidade_influencer"] > 0.6]  # Ajuste o cutoff conforme o caso
-print(suspeitos[["texto", "probabilidade_influencer"]])
+Detecção de formulários copiados/automatizados (ex: uso repetido de estruturas iguais).
 
-# Opcional: salvar resultado
-# df.to_csv("reclamacoes_com_probabilidades.csv", index=False)
+Palavras-chave ou expressões no texto da reclamação.
+
+Histórico de relacionamento com a instituição.
