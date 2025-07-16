@@ -1,21 +1,42 @@
-Foi feita entre 2h e 4h da manhã.
+SOU UM CIENTISTA DE DADOS E FOI DADA A SEGUINTE TAREFA: IDENTIFICAR AS RECLAMAÇÕES QUE SÃO ABERTAS DEVIDO A ALGUMA INSATISFAÇÃO COM A AGENCIA (FALTA DE CONTATO, MAL ATENDIMENTO ETC). A PRINCIPIO PENSEI NO SEGUINTE:
+- FILTRAR NO CAMPO TEXTO TODAS AS MANIFESTAÇÕES QUE CONTÉM A PALAVRA "AGENCIA";
+- FAZER UMA LISTA DE POSSÍVEIS TERMOS E FRASES;
+- ER UMA LISTA DE SINONIMOS PARA ALGUNS TERMOS RELEVANTES.
 
-O texto contém "pix que não fiz".
+EXEMPLO:
+termos = [{'seq': ['gerente', 'atendimento', 'ruim'], 'peso': 0.9},
+   	{'seq': ['manipulado', 'gerente', 'agencia'], 'peso': 0.9},
+	{'seq': ["falta", "de", "contato"], 'peso': 0.7},
+	{'seq': ["tentativas", "contato", "frustrada"], 'peso': 0.8}]
+sinonimos = {
+    "gerente":   ["gerencia", "responsável"],
+    "atendimento": ["suporte", "assistência", "apoio"],
+    "ruim":      ["péssimo", "descaso", "insatisfatório"],
+    "contato":   ["comunicação", "interação", "conexão", "ligação"],
+    "frustrada": ["sem exito", "sem sucesso", "vã"],
+    "falta":     ["ausência", "carência"]
+}
 
-O CPF já fez 5 reclamações similares nos últimos 10 dias.
+- EM SEGUIDA, EXTRAIR APENAS AS FRASES DO TEXTO QUE CITA A AGÊNCIA;
+- APÓS ISSO, PODEMOS CRIAR UMA FORMA DE CRIAR UM "SCORE" DE PROBABILIDADE PARA O NOSSO OBJETIVO, CONSIDERANDO OS PESOS E SINONIMOS (SUGIRA MAIS CRITÉRIOS PARA A NOSSA FLAG)
 
-O IP de acesso está listado em uma blacklist.
+CONSIDERAÇÕES:
+- NÃO TEMOS RÓTULOS HISTÓRICOS (SE TRATA DE UMA DEMANDA NOVA)
+- FOI FEITO O PREPROCESSAMENTO DO CAMPO TEXTO, FRASES E SINONIMOS (remoção de acentos, conversão para minuscula, remoção de caracteres especiais e remoção de numeros)
+- NÃO É POSSÍVEL UTILIZAR MODELOS PRÉ-TREINADOS, LLMS OU BIBLIOTECAS QUE DEPENDEM DE REQUISIÇÕES EXTERNAS (A INFRAESTRUTURA DA EMPRESA NÃO PERMITE)
 
-Mudanças bruscas em canais usados (ex: só usava app, e agora só SAC).
+PRECISO PRIMEIRAMENTE DE UMA OPINIÃO DO NOSSO CAMINHO TRILHADO ATÉ AGORA E SUGESTÕES DE TÉCNICAS PARA CRIAÇÃO DESTA FLAG DA MANEIRA MAIS PRECISA POSSÍVEL.
 
-Se o cliente fez múltiplas reclamações do mesmo tipo em curto período.
+ATUALIZAÇÃO 1:
+GUARDE AS INFORMAÇÕES PARA CRIARMOS UM CÓDIGO COMPLETO, NÃO RETORNE-O POR ENQUANTO.
 
-Reclamações que envolvem valores altos com pouca comprovação.
-
-Usuários que alteram frequentemente dados cadastrais (telefone, e-mail, etc.).
-
-Detecção de formulários copiados/automatizados (ex: uso repetido de estruturas iguais).
-
-Palavras-chave ou expressões no texto da reclamação.
-
-Histórico de relacionamento com a instituição.
+Pipeline que achei interessante:
+1. Preprocessamento (lowercasing, remoção de acentos/números).
+2. Tokenização + POS tagging (SpaCy offline).
+3. Matching de seqüências + sinônimos (vocabulário expandido).
+4. Cálculo de features
+5. Soma ponderada de ocorrências
+6. distância ao termo “agencia”
+7. similaridade TF‑IDF / embeddings / topic score
+8. Score final = combinação linear dessas features (com pesos ajustados no seu seed set).
+9. Threshold para decisão binária (sinalizar ou não).
