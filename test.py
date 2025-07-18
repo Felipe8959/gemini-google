@@ -1,46 +1,50 @@
-import pandas as pd
-from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-from scipy.stats import zscore
+import matplotlib.pyplot as plt
 
-# 1) Carregue seus dados
-# Exemplo: df = pd.read_csv('reclamacoes.csv', parse_dates=['date'])
-# df deve ter colunas: 'date' (datetime) e 'text' (string)
+# ----------------------------------------
+# Assumindo que você já tenha calculado:
+# - weekly_tfidf: DataFrame (índice datetime) com TF‑IDF médio de cada n‑gram por período
+# - weekly_z: DataFrame (mesmo índice) com z‑scores de cada n‑gram por período
+# - spikes: Series com z‑score da última semana, indexada por n‑gram
+# ----------------------------------------
 
-# Supondo que você já tenha um DataFrame 'df':
-df = df.copy()
-df['date'] = pd.to_datetime(df['date'])
-df = df.set_index('date')
+# Número de n‑grams que você quer monitorar
+top_n = 5
 
-# 2) Vetorização de n‑grams (bi-gramas e tri-gramas)
-vectorizer = CountVectorizer(
-    ngram_range=(2,3),    # bi‑grams e tri‑grams
-    stop_words=None       # ou liste suas stop‑words em PT
+# Seleciona os top N n‑grams em spike na última semana
+top_spikes = spikes.nlargest(top_n).index.tolist()
+
+# 1) Gráficos de linha — evolução do TF‑IDF médio
+for ngram in top_spikes:
+    plt.figure()
+    plt.plot(
+        weekly_tfidf.index,
+        weekly_tfidf[ngram],
+        marker='o',
+        linestyle='-'
+    )
+    plt.title(f'Evolução TF‑IDF médio: "{ngram}"')
+    plt.xlabel('Período')
+    plt.ylabel('TF‑IDF médio')
+    plt.xticks(rotation=45)
+    plt.grid(True, linestyle='--', alpha=0.5)
+    plt.tight_layout()
+
+# 2) Gráfico de barras — z‑score dos top N na última semana
+plt.figure()
+values = spikes[top_spikes]
+plt.bar(top_spikes, values)
+plt.title('Z‑score dos Top N‑grams na Última Semana')
+plt.xlabel('N‑gram')
+plt.ylabel('Z‑score')
+plt.xticks(rotation=45)
+plt.axhline(y=threshold, linestyle='--', linewidth=1)
+plt.text(
+    x=0, y=threshold + 0.1,
+    s=f'Threshold = {threshold}',
+    va='bottom'
 )
-X_counts = vectorizer.fit_transform(df['text'])
+plt.grid(axis='y', linestyle='--', alpha=0.5)
+plt.tight_layout()
 
-# 3) Cálculo de TF‑IDF
-tfidf_transformer = TfidfTransformer()
-X_tfidf = tfidf_transformer.fit_transform(X_counts)
-
-# 4) Montar DataFrame de TF‑IDF por documento
-tfidf_df = pd.DataFrame(
-    X_tfidf.toarray(),
-    index=df.index,
-    columns=vectorizer.get_feature_names_out()
-)
-
-# 5) Agregação temporal (semanal, diária etc.)
-# Aqui usamos semanal ('W'), mas pode ser 'D' para diário
-weekly_tfidf = tfidf_df.resample('W').mean()
-
-# 6) Cálculo de z‑score ao longo das semanas
-weekly_z = weekly_tfidf.apply(lambda col: zscore(col, nan_policy='omit'))
-
-# 7) Detectar spikes na última semana
-threshold = 2.0  # defina seu limiar de z‑score (ex.: 1.5, 2.0, 2.5)
-last_week_z = weekly_z.iloc[-1]
-spikes = last_week_z[last_week_z > threshold].sort_values(ascending=False)
-
-# 8) Exibir resultados
-print("N‑grams em spike (z >", threshold, "):")
-print(spikes)
+# Exibe todos os gráficos
+plt.show()
