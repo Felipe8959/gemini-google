@@ -1,107 +1,46 @@
 import pandas as pd
-import re
-import unicodedata
-from collections import defaultdict
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from scipy.stats import zscore
 
-def preprocess_text(text: str) -> list[str]:
-    txt = text.lower()
-    txt = unicodedata.normalize("NFD", txt)
-    txt = "".join(ch for ch in txt if unicodedata.category(ch) != "Mn")
-    txt = re.sub(r"[^a-z0-9\s]", " ", txt)
-    return txt.split()
+# 1) Carregue seus dados
+# Exemplo: df = pd.read_csv('reclamacoes.csv', parse_dates=['date'])
+# df deve ter colunas: 'date' (datetime) e 'text' (string)
 
-raw_synonyms = [
-    ["gerente","gerencia","responsavel"],
-    ["atendimento","suporte","assistencia","apoio"],
-    ["ruim","péssimo","descaso","insatisfatorio"],
-    ["contato","comunicacao","interacao","conexao","ligacao"],
-    ["frustrada","sem exito","sem sucesso","va","vã"],
-    ["falta","ausencia","carencia"],
-    ["agencia","agência"],
-    ["manipulado","manipulacao"],
-    ["tentativas","tentativa"]
-]
+# Supondo que você já tenha um DataFrame 'df':
+df = df.copy()
+df['date'] = pd.to_datetime(df['date'])
+df = df.set_index('date')
 
-raw_phrases = [
-    {"seq": ["falta","de","contato"], "peso": 0.7, "causa": "falta de contato"},
-    {"seq": ["tentativas","contato","frustrada"], "peso": 0.8, "causa": "falta de contato"},
-]
+# 2) Vetorização de n‑grams (bi-gramas e tri-gramas)
+vectorizer = CountVectorizer(
+    ngram_range=(2,3),    # bi‑grams e tri‑grams
+    stop_words=None       # ou liste suas stop‑words em PT
+)
+X_counts = vectorizer.fit_transform(df['text'])
 
-raw_root_seqs = [
-    ["agencia"],
-    ["gerente","agencia"],
-    ["gerente","da","agencia"]
-]
+# 3) Cálculo de TF‑IDF
+tfidf_transformer = TfidfTransformer()
+X_tfidf = tfidf_transformer.fit_transform(X_counts)
 
-synonyms_to_canonical = {}
-for group in raw_synonyms:
-    normalized = [preprocess_text(term)[0] for term in group if preprocess_text(term)]
-    canonical = normalized[0]
-    for tok in normalized:
-        synonyms_to_canonical[tok] = canonical
+# 4) Montar DataFrame de TF‑IDF por documento
+tfidf_df = pd.DataFrame(
+    X_tfidf.toarray(),
+    index=df.index,
+    columns=vectorizer.get_feature_names_out()
+)
 
-frases_com_pesos = []
-for entry in raw_phrases:
-    seq_norm = []
-    for term in entry["seq"]:
-        toks = preprocess_text(term)
-        if not toks: continue
-        seq_norm.append(synonyms_to_canonical.get(toks[0], toks[0]))
-    frases_com_pesos.append({"seq": seq_norm, "peso": entry["peso"], "causa": entry["causa"]})
+# 5) Agregação temporal (semanal, diária etc.)
+# Aqui usamos semanal ('W'), mas pode ser 'D' para diário
+weekly_tfidf = tfidf_df.resample('W').mean()
 
-root_seqs = []
-for root in raw_root_seqs:
-    seq_norm = []
-    for term in root:
-        toks = preprocess_text(term)
-        if not toks: continue
-        seq_norm.append(synonyms_to_canonical.get(toks[0], toks[0]))
-    root_seqs.append(seq_norm)
+# 6) Cálculo de z‑score ao longo das semanas
+weekly_z = weekly_tfidf.apply(lambda col: zscore(col, nan_policy='omit'))
 
-def calcular_score_com_distancia(
-    tokens: list[str],
-    frases_com_pesos: list[dict],
-    root_seqs: list[list[str]],
-    synonyms_to_canonical: dict[str, str],
-    window_size: int = 10
-) -> tuple[float, str | None]:
-    posicoes = defaultdict(list)
-    for idx, tok in enumerate(tokens):
-        canon = synonyms_to_canonical.get(tok, tok)
-        posicoes[canon].append(idx)
+# 7) Detectar spikes na última semana
+threshold = 2.0  # defina seu limiar de z‑score (ex.: 1.5, 2.0, 2.5)
+last_week_z = weekly_z.iloc[-1]
+spikes = last_week_z[last_week_z > threshold].sort_values(ascending=False)
 
-    best_score = 0.0
-    best_causa = None
-
-    for pat in frases_com_pesos:
-        seq_canon = [synonyms_to_canonical.get(t, t) for t in pat['seq']]
-        pat_positions = [pos for term in seq_canon for pos in posicoes.get(term, [])]
-        if not pat_positions:
-            continue
-        for root in root_seqs:
-            root_positions = [pos for term in root for pos in posicoes.get(term, [])]
-            if not root_positions:
-                continue
-            dist = min(abs(i - j) for i in pat_positions for j in root_positions)
-            proximity = max(0, window_size - dist) / window_size
-            score = pat['peso'] * (1 + proximity)
-            if score > best_score:
-                best_score, best_causa = score, pat['causa']
-
-    return best_score, best_causa
-
-# Exemplo de aplicação em DataFrame
-df = pd.DataFrame({
-    "texto": [
-        "O gerente da agência não prestou auxílio e faltou contato.",
-        "Tivemos várias tentativas de comunicação sem sucesso.",
-        "Produto entregue em perfeito estado."
-    ]
-})
-
-df['tokens'] = df['texto'].apply(preprocess_text)
-results = df['tokens'].apply(lambda toks: calcular_score_com_distancia(
-    toks, frases_com_pesos, root_seqs, synonyms_to_canonical, window_size=15))
-df[['score','causa']] = pd.DataFrame(results.tolist(), index=df.index)
-
-print(df[['texto','score','causa']])
+# 8) Exibir resultados
+print("N‑grams em spike (z >", threshold, "):")
+print(spikes)
