@@ -1,118 +1,66 @@
-import re
-import unicodedata
 from collections import defaultdict
-import pandas as pd
+from typing import List, Dict, Tuple, Optional
 
-# 1) Função de pré‑processamento comum
-def preprocess_text(text: str) -> list[str]:
-    """
-    Lowercase, strip acentos, remove não-alfanuméricos e split em tokens.
-    """
-    txt = text.lower()
-    txt = unicodedata.normalize("NFD", txt)
-    txt = "".join(ch for ch in txt if unicodedata.category(ch) != "Mn")
-    txt = re.sub(r"[^a-z0-9\s]", " ", txt)
-    return txt.split()
-
-# 2) Definição “bruta” dos seus sinônimos como lista de listas
-raw_synonyms = [
-    ["gerente","gerencia","responsavel"],
-    ["atendimento","suporte","assistencia","apoio"],
-    ["ruim","péssimo","descaso","insatisfatorio"],
-    ["contato","comunicacao","interacao","conexao","ligacao"],
-    ["frustrada","sem exito","sem sucesso","va","vã"],
-    ["falta","ausencia","carencia"],
-    ["agencia","agência"],
-    ["manipulado","manipulacao"],
-    ["tentativas","tentativa"]
-]
-
-# 3) Normaliza cada grupo de sinônimos e monta token→canônico
-synonyms_to_canonical: dict[str,str] = {}
-for group in raw_synonyms:
-    # torne cada termo “canônico” e seus sinônimos normais
-    normalized = [preprocess_text(term)[0] for term in group if preprocess_text(term)]
-    canonical = normalized[0]
-    for tok in normalized:
-        synonyms_to_canonical[tok] = canonical
-
-# 4) Frases_com_pesos brutas (seq de “chaves canônicas”)
-raw_phrases = [
-    {"seq": ["gerente","atendimento","ruim"],         "peso": 0.9, "causa": "falta de contato"},
-    {"seq": ["manipulado","gerente","agencia"],       "peso": 0.9, "causa": "falta de contato"},
-    {"seq": ["falta","de","contato"],                 "peso": 0.7, "causa": "falta de contato"},
-    {"seq": ["tentativas","contato","frustrada"],     "peso": 0.8, "causa": "falta de contato"},
-]
-
-# 5) Pré‑processa as seqüências das frases e mapeia a canônico
-frases_com_pesos = []
-for entry in raw_phrases:
-    seq_norm: list[str] = []
-    for term in entry["seq"]:
-        toks = preprocess_text(term)
-        if not toks: 
-            continue
-        # mapeia para a forma canônica (se for sinônimo)
-        seq_norm.append(synonyms_to_canonical.get(toks[0], toks[0]))
-    frases_com_pesos.append({
-        "seq": seq_norm,
-        "peso": entry["peso"],
-        "causa": entry["causa"]
-    })
-
-# 6) Função de cálculo de score usando distância de tokens
-def calcular_score_ponderado(
-    tokens: list[str],
-    frases_com_pesos: list[dict],
-    synonyms_to_canonical: dict[str,str],
+def calcular_score_com_distancia(
+    tokens: List[str],
+    frases_com_pesos: List[Dict[str, any]],
+    root_seqs: List[List[str]],
+    synonyms_to_canonical: Dict[str, str],
     window_size: int = 10
-) -> tuple[float,str|None]:
-    # a) indexa todas as posições de cada token canônico
-    posicoes: dict[str,list[int]] = defaultdict(list)
-    for i, tok in enumerate(tokens):
-        canon = synonyms_to_canonical.get(tok, tok)
-        posicoes[canon].append(i)
-
-    best_score = 0.0
-    best_causa = None
-
-    # b) para cada padrão, tenta encontrar todos os termos
-    for pat in frases_com_pesos:
-        seq, peso, causa = pat["seq"], pat["peso"], pat["causa"]
-        found = []
-        for term in seq:
-            lst = posicoes.get(term, [])
-            if not lst:
-                found = []
-                break
-            found.append(lst[0])  # primeira ocorrência
-        if not found:
-            continue
-
-        # c) calcula distância e proximidade
-        dist = max(found) - min(found)
+) -> Tuple[float, Optional[str]]:
+    """
+    Calcula o score de padrões de reclamação em relação a termos 'raiz' (e.g. 'agencia',
+    'gerente agencia', 'gerente da agencia'). Para cada padrão em frases_com_pesos, mede
+    a menor distância entre qualquer token do padrão e qualquer token de cada root_seq,
+    aplica:
         proximity = max(0, window_size - dist) / window_size
         score = peso * (1 + proximity)
+    Retorna o maior score e sua causa associada.
 
-        if score > best_score:
-            best_score, best_causa = score, causa
+    tokens: lista de tokens do texto (pré‑processados)
+    frases_com_pesos: [
+        {'seq': ['falta','de','contato'], 'peso': 0.7, 'causa': 'falta de contato'},
+        ...
+    ]
+    root_seqs: [
+        ['agencia'],
+        ['gerente','agencia'],
+        ['gerente','da','agencia']
+    ]
+    synonyms_to_canonical: mapeia cada token/sinônimo para sua forma canônica
+    window_size: número máximo de tokens para bônus de proximidade
+    """
+    # 1) indexa posições de cada token canônico
+    posicoes: Dict[str, List[int]] = defaultdict(list)
+    for idx, tok in enumerate(tokens):
+        canon = synonyms_to_canonical.get(tok, tok)
+        posicoes[canon].append(idx)
+
+    best_score = 0.0
+    best_causa: Optional[str] = None
+
+    # 2) para cada padrão de reclamação
+    for pat in frases_com_pesos:
+        # mapeia a sequência para canônicos
+        seq_canon = [synonyms_to_canonical.get(t, t) for t in pat['seq']]
+        pat_positions = [pos for term in seq_canon for pos in posicoes.get(term, [])]
+        if not pat_positions:
+            continue
+
+        # 3) compara com cada término raiz
+        for root in root_seqs:
+            root_canon = [synonyms_to_canonical.get(t, t) for t in root]
+            root_positions = [pos for term in root_canon for pos in posicoes.get(term, [])]
+            if not root_positions:
+                continue
+
+            # distância mínima entre qualquer token do padrão e da raiz
+            dist = min(abs(i - j) for i in pat_positions for j in root_positions)
+            proximity = max(0, window_size - dist) / window_size
+            score = pat['peso'] * (1 + proximity)
+
+            if score > best_score:
+                best_score = score
+                best_causa = pat['causa']
 
     return best_score, best_causa
-
-# 7) Exemplo de aplicação a um DataFrame
-# -> df.texto contém o texto bruto de cada reclamação
-df = pd.DataFrame({
-    "texto": [
-        "O gerente de suporte da agência foi ruim e não retornou.",
-        "Tive falta de contato com a agência, tentativas frustradas!",
-        "Produto danificado, problema na entrega."
-    ]
-})
-
-# 8) Pipeline completo
-df["tokens"] = df["texto"].apply(preprocess_text)
-results = df["tokens"] \
-    .apply(lambda toks: calcular_score_ponderado(toks, frases_com_pesos, synonyms_to_canonical, window_size=15))
-df[["score","causa"]] = pd.DataFrame(results.tolist(), index=df.index)
-
-print(df)
