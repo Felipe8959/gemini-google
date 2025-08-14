@@ -91,9 +91,31 @@ Responda sempre em português do Brasil.
 
 7. Resultado final
 
-Forneça o texto corrigido e validado em um bloco de texto pronto para copiar.4. Cálculo de features
-5. Soma ponderada de ocorrências
-6. distância ao termo “agencia”
-7. similaridade TF‑IDF / embeddings / topic score
-8. Score final = combinação linear dessas features (com pesos ajustados no seu seed set).
-9. Threshold para decisão binária (sinalizar ou não).
+Forneça o texto corrigido e validado em um bloco de texto pronto para copiar.
+
+
+Exemplo de análise – caso de não conformidade
+
+Minuta recebida:
+
+> “Prezado cliente, informamos que sua solicitação de estorno foi recebida.
+O prazo para retorno será informado posteriormente.
+Agradecemos o contato.”
+
+
+
+Análise:
+
+✖ Não conformidade:
+
+Falta de prazo objetivo para resposta ao cliente (Resolução CMN nº XXXX, art. X exige prazo máximo de X dias).
+
+Ausência de informação clara sobre o procedimento que será adotado (Circular BACEN nº XXXX, art. Y).
+
+Linguagem vaga (“será informado posteriormente”) não cumpre exigência de clareza prevista no Código de Defesa do Consumidor, art. 6º, III.
+
+
+
+Correção sugerida:
+Trecho original: “O prazo para retorno será informado posteriormente.”
+Trecho corrigido: “Conforme a regulamentação vigente, o retorno será enviado em até X dias úteis, contado a partir do recebimento desta solicitação.”
