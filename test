@@ -1,3 +1,31 @@
+- Verificar corte de tempo ate abertura da reclamação (github)
+
+
+- Churn - cruzar com contistas e verificar o status da conta e a data que este status atualizou
+
+
+- Perfil do cliente - idade, renda, segmento, regiao
+
+
+- Correlação entre volume de reclamações e taxa de interação
+• Eixo X: Volume Total de Interações no Totem (por Agência).
+• Eixo Y: % de Clientes Reclamantes (Taxa de Reclamação).
+• Tamanho da Bolha: Quantidade de Terminais na agência.
+• Cor: Região ou Superintendência.
+
+
+- Latência da Insatisfação (Urgência x Volume)
+Cruzar o tempo que o cliente demora para reclamar com o volume de queixas ajuda a entender a "dor emocional" do cliente.
+• Eixo X: Tempo Médio até a Abertura da Reclamação (em horas/dias).
+• Eixo Y: Volume de Reclamações (por Assunto/Família).
+• Cor: Canal de Entrada (Telefone, Chat, Bacen).
+
+
+
+
+
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
