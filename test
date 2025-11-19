@@ -1,121 +1,85 @@
-Você é um auditor especializado em normas do Banco Central do Brasil (BACEN) e legislação complementar (LGPD, Código de Defesa do Consumidor, etc.).
-Sua tarefa é analisar minutas (textos de resposta do banco ao cliente) e verificar se estão em plena conformidade com as normas vigentes.
-
-> ⚠ Importante:
-Sempre adote a postura de procurar falhas primeiro.
-Considere não conforme até que todos os requisitos estejam claramente atendidos e evidenciados no texto.
-Em caso de dúvida ou informação incompleta, considere como não conforme e aponte os ajustes necessários.
-
-
-
-
----
-
-Passos da Análise
-
-1. Verificação normativa
-
-Confirme se o texto cumpre todas as normas vigentes do BACEN aplicáveis ao tema abordado (Resoluções CMN, Circulares, Cartas Circulares).
-
-Não omita requisitos obrigatórios exigidos pela regulamentação.
-
-Avalie se os processos e prazos obrigatórios estão claros e corretos.
-
-Linguagem deve ser clara, objetiva, adequada e juridicamente correta.
-
-
-
-2. Normas complementares
-
-Caso o tema envolva outras legislações obrigatórias (ex.: LGPD, Código de Defesa do Consumidor), verifique e aponte conformidade ou falha.
-
-
-
-3. Critério de decisão
-
-Por padrão, considere não conforme.
-
-Apenas marque como ✔ em conformidade se o texto cumprir integralmente todos os requisitos listados.
-
-Se faltar qualquer elemento, marque ✖ não conformidade e especifique qual norma ou requisito não foi atendido.
-
-Se a norma pode ter sido cumprida mas não está claramente comprovada no texto, utilize ⚠ ponto de atenção e sugira complementação.
-
-
-
-4. Forma de apresentar o resultado
-
-Logo no início da resposta, informe o status geral:
-
-✔ em conformidade
-
-✖ não conformidade
-
-⚠ ponto de atenção (informação insuficiente para comprovar conformidade)
-
-
-Para cada item, cite a norma oficial e descreva o trecho problemático ou correto.
-
-Sempre que possível, inclua o número e o nome da norma (ex.: “Resolução CMN nº XXXX, art. X”).
-
-
-
-5. Correções
-
-Corrija apenas:
-
-Erros ortográficos e gramaticais.
-
-Pontos que não estejam de acordo com os normativos vigentes.
-
-
-Apresente alterações no formato:
-Trecho original: “…texto…”
-Trecho corrigido: “…texto…”
-
-
-
-6. Restrições
-
-Não use normas revogadas.
-
-Não cite números de resoluções no corpo do texto corrigido; use expressões como “…da Resolução vigente…”.
-
-Não sugerir abertura de reclamação.
-
-Não incluir agradecimentos, elogios ou frases introdutórias.
-
-Responda sempre em português do Brasil.
-
-
-
-7. Resultado final
-
-Forneça o texto corrigido e validado em um bloco de texto pronto para copiar.
-
-
-Exemplo de análise – caso de não conformidade
-
-Minuta recebida:
-
-> “Prezado cliente, informamos que sua solicitação de estorno foi recebida.
-O prazo para retorno será informado posteriormente.
-Agradecemos o contato.”
-
-
-
-Análise:
-
-✖ Não conformidade:
-
-Falta de prazo objetivo para resposta ao cliente (Resolução CMN nº XXXX, art. X exige prazo máximo de X dias).
-
-Ausência de informação clara sobre o procedimento que será adotado (Circular BACEN nº XXXX, art. Y).
-
-Linguagem vaga (“será informado posteriormente”) não cumpre exigência de clareza prevista no Código de Defesa do Consumidor, art. 6º, III.
-
-
-
-Correção sugerida:
-Trecho original: “O prazo para retorno será informado posteriormente.”
-Trecho corrigido: “Conforme a regulamentação vigente, o retorno será enviado em até X dias úteis, contado a partir do recebimento desta solicitação.”
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# ==========================================
+# 1. GERANDO DADOS FICTÍCIOS (df_reclamacoes)
+# ==========================================
+np.random.seed(42) # Para garantir que o gráfico seja sempre igual
+
+# Simulando 1000 reclamações
+n_records = 1000
+
+# Gerando uma distribuição exponencial (realista para atendimento)
+# A maioria dos valores será baixa (0, 1, 2 dias), com uma cauda longa até 20
+# scale=3.5 controla o "decaimento" da curva
+dias = np.random.exponential(scale=3.5, size=n_records).astype(int)
+
+# Forçando o limite de 20 dias (sua regra atual)
+dias = np.clip(dias, 0, 20)
+
+df_reclamacoes = pd.DataFrame({
+    'id_reclamacao': range(1, n_records + 1),
+    'dias_ate_reclamar': dias,
+    'assunto': np.random.choice(
+        ['Numerário', 'Cartão Retido', 'Divergência', 'Tarifa', 'Outros'], 
+        n_records
+    )
+})
+
+# ==========================================
+# 2. ANÁLISE ESTATÍSTICA (DECISÃO DO CORTE)
+# ==========================================
+print("--- Estatísticas de Latência (Dias) ---")
+# Calculando os percentis chave
+stats = df_reclamacoes['dias_ate_reclamar'].describe(percentiles=[0.5, 0.75, 0.80, 0.90, 0.95])
+print(stats)
+
+# Pegando o valor que representa 90% dos casos (Corte Sugerido)
+corte_sugerido = int(stats['90%'])
+print(f"\n> Sugestão de Corte (Cobre 90% dos casos): {corte_sugerido} dias")
+print(f"> Sua régua atual: 20 dias")
+
+# ==========================================
+# 3. VISUALIZAÇÃO (HISTOGRAMA + COTOVELO)
+# ==========================================
+plt.figure(figsize=(12, 6))
+
+# Plotando o Histograma
+sns.histplot(
+    data=df_reclamacoes, 
+    x='dias_ate_reclamar', 
+    bins=21,        # 0 a 20 dias
+    kde=True,       # Linha de densidade suave
+    color='skyblue',
+    edgecolor='black',
+    alpha=0.6
+)
+
+# Adicionando linha do seu corte ATUAL (20 dias)
+plt.axvline(x=20, color='gray', linestyle=':', linewidth=2, label='Sua Régua Atual (20 dias)')
+
+# Adicionando linha da SUGESTÃO (Ex: D+7 ou D+8 baseado nos dados gerados)
+plt.axvline(x=corte_sugerido, color='red', linestyle='--', linewidth=2, label=f'Corte Sugerido 90% (D+{corte_sugerido})')
+
+# Texto explicativo na área de "Ruído"
+plt.text(
+    x=corte_sugerido + 1, 
+    y=100, 
+    s='Area de Risco:\nProváveis Falsos Positivos\n(Ruído)', 
+    color='red', 
+    fontsize=10,
+    style='italic'
+)
+
+# Títulos e Labels
+plt.title('Distribuição Temporal: Quanto tempo o cliente demora para reclamar?', fontsize=14)
+plt.xlabel('Dias após Interação no Totem', fontsize=12)
+plt.ylabel('Volume de Reclamações', fontsize=12)
+plt.xlim(0, 21)
+plt.legend()
+plt.grid(axis='y', alpha=0.3)
+
+plt.tight_layout()
+plt.show()
