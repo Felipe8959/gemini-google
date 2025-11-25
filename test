@@ -1,3 +1,20 @@
+Qtd de reclamações totais
+Qtd de reclamações nos últimos 12 meses / 6 meses / 3 meses
+Qtd reincidências (pos interação)
+Tempo desde a última reclamação (em dias)
+Tipos de reclamação anteriores (deve retornar um array com os assuntos. ex.: [Pix, Renegociação])
+Hora do dia da interação
+Dia da semana da interação
+Mês da interação
+Qtd de interações do cliente no totem no mesmo dia
+Qtd de interações do cliente nos últimos 7/30 dias
+Ranking da agência/terminal (Posição da agência/terminal em ranking de problemas)
+
+o	Target binário: 1 (Reclamou na janela) | 0 (Não reclamou).
+o	Target contínuo de confiança (score entre 0-1)
+	Utilizar curva sigmoid para definição do score
+
+
 - Verificar corte de tempo ate abertura da reclamação (github)
 
 
