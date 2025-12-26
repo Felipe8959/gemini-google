@@ -1,6 +1,163 @@
-- Aplicar uma analise nao linear (regressão logística) para retornar as variáveis mais importantes para as reclamações abertas em ate 1, 2, 10, 14, e 30 dias
+import pandas as pd
+import numpy as np
+from rank_bm25 import BM25Okapi
+from sentence_transformers import SentenceTransformer, CrossEncoder, util
+from tqdm import tqdm
+import re
 
-- Aplicar p value e odd ratio para ver a relevancia das variaveis.
+# ==============================================================================
+# 1. CONFIGURAÇÃO E CARREGAMENTO DE DADOS (SIMULAÇÃO)
+# ==============================================================================
 
-- o resultado final deve ser a lista das variáveis mais importantes (top 10) para cada target (1, 2, 10, 14 e 30 dias - existe uma coluna para cada) e seus p values e OR, em formato dataframe. O codigo deve ser simples e dinâmico.
+# Simulação dos seus dados (Substitua isso pelo carregamento do seu CSV/Excel real)
+# df_fpa = pd.read_excel('seus_fpas.xlsx')
+# df_causas = pd.read_excel('suas_causas.xlsx')
 
+data_fpa = {
+    'Familia': ['Cartão', 'Conta', 'Seguros', 'Empréstimo'],
+    'Produto': ['Crédito', 'Corrente', 'Vida', 'Pessoal'],
+    'Assunto': ['Juros abusivos', 'Não consigo acessar', 'Apólice não chegou', 'Boleto não gerado']
+}
+# Gerando alguns dados dummy para chegar perto de uma lista
+df_fpa = pd.DataFrame(data_fpa)
+# Concatenando FPA
+df_fpa['FPA_Texto'] = df_fpa['Familia'] + " " + df_fpa['Produto'] + " " + df_fpa['Assunto']
+
+data_causas = [
+    'Erro no cálculo de encargos e taxas',
+    'Falha de autenticação no app',
+    'Erro de envio de correspondência física',
+    'Sistema indisponível para geração de boletos',
+    'Cliente não reconhece a compra',
+    'Demora na análise de proposta'
+]
+df_causas = pd.DataFrame(data_causas, columns=['Causa'])
+
+print(f"Carregados {len(df_fpa)} FPAs e {len(df_causas)} Causas.")
+
+# ==============================================================================
+# 2. INICIALIZAÇÃO DOS MODELOS
+# ==============================================================================
+print("Carregando modelos... (isso pode levar um minuto na primeira vez)")
+
+# Modelo 1: Semântico (Bi-Encoder) - Rápido para gerar candidatos
+# 'paraphrase-multilingual-MiniLM-L12-v2' é excelente para PT-BR e leve
+bi_encoder = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+
+# Modelo 2: Cross-Encoder - O "Juiz" de alta precisão
+# Usamos um modelo multilingue treinado no MS MARCO para re-ranking
+cross_encoder = CrossEncoder('cross-encoder/mmarco-mMiniLM-v2-L12-H384-v1')
+
+# ==============================================================================
+# 3. PREPARAÇÃO DOS MOTORES DE BUSCA
+# ==============================================================================
+
+# --- A. Preparação Lexical (BM25) ---
+def text_tokenizer(text):
+    # Tokenização simples: lowercase e remove pontuação básica
+    text = text.lower()
+    return re.findall(r'\w+', text)
+
+tokenized_corpus = [text_tokenizer(doc) for doc in df_causas['Causa']]
+bm25 = BM25Okapi(tokenized_corpus)
+
+# --- B. Preparação Semântica (Embeddings) ---
+# Codificamos todas as 190 causas de uma vez
+corpus_embeddings = bi_encoder.encode(df_causas['Causa'].tolist(), convert_to_tensor=True)
+
+# ==============================================================================
+# 4. FUNÇÃO DE BUSCA HÍBRIDA
+# ==============================================================================
+
+def search_fpa(fpa_text, top_k_retrieval=10, final_top_k=3):
+    """
+    1. Busca candidatos via BM25 (Palavra-chave)
+    2. Busca candidatos via Bi-Encoder (Semântica)
+    3. Une os candidatos únicos
+    4. Re-rankeia com Cross-Encoder para precisão final
+    """
+    
+    # --- 1. Recuperação Lexical (BM25) ---
+    tokenized_query = text_tokenizer(fpa_text)
+    # Recupera Top K índices pelo BM25
+    # O método get_top_n retorna texto, precisamos mapear para índices se quisermos performance,
+    # mas com 190 causas, podemos pegar scores diretos.
+    doc_scores_bm25 = bm25.get_scores(tokenized_query)
+    # Pegar os índices dos melhores scores
+    top_n_bm25_indices = np.argsort(doc_scores_bm25)[::-1][:top_k_retrieval]
+    
+    # --- 2. Recuperação Semântica (Bi-Encoder) ---
+    query_embedding = bi_encoder.encode(fpa_text, convert_to_tensor=True)
+    # Semantic Search
+    hits = util.semantic_search(query_embedding, corpus_embeddings, top_k=top_k_retrieval)
+    top_n_semantic_indices = [hit['corpus_id'] for hit in hits[0]]
+    
+    # --- 3. União de Candidatos ---
+    # Unimos os índices encontrados pelos dois métodos (set para remover duplicados)
+    candidate_indices = set(top_n_bm25_indices) | set(top_n_semantic_indices)
+    candidate_indices = list(candidate_indices)
+    
+    # Prepara pares para o Cross-Encoder: [[FPA, Causa1], [FPA, Causa2]...]
+    cross_inp = [[fpa_text, df_causas.iloc[idx]['Causa']] for idx in candidate_indices]
+    
+    # --- 4. Re-ranking (Cross-Encoder) ---
+    if not cross_inp: return []
+    
+    cross_scores = cross_encoder.predict(cross_inp)
+    
+    # Organiza o resultado final
+    results = []
+    for idx, score in zip(candidate_indices, cross_scores):
+        results.append({
+            'Causa': df_causas.iloc[idx]['Causa'],
+            'Score': float(score) # Score de 0 a 1 (ou logits dependendo do modelo, mas mmarco gera scores comparáveis)
+        })
+    
+    # Ordena pelo score do Cross-Encoder (maior é melhor)
+    results = sorted(results, key=lambda x: x['Score'], reverse=True)
+    
+    return results[:final_top_k]
+
+# ==============================================================================
+# 5. EXECUÇÃO EM MASSA
+# ==============================================================================
+
+resultados_finais = []
+
+print("Processando FPAs...")
+for index, row in tqdm(df_fpa.iterrows(), total=df_fpa.shape[0]):
+    fpa_atual = row['FPA_Texto']
+    
+    # Executa a busca
+    matches = search_fpa(fpa_atual, top_k_retrieval=15, final_top_k=3)
+    
+    # Estrutura para salvar
+    # Pegamos o Top 1 como sugestão principal, mas salvamos os 3 para análise
+    best_match = matches[0] if matches else {'Causa': None, 'Score': 0}
+    
+    resultados_finais.append({
+        'Familia': row['Familia'],
+        'Produto': row['Produto'],
+        'Assunto': row['Assunto'],
+        'FPA_Completo': fpa_atual,
+        'Melhor_Causa_Sugerida': best_match['Causa'],
+        'Score_Confianca': round(best_match['Score'], 4),
+        'Top_3_Causas': str([m['Causa'] for m in matches]), # Para debug/análise
+        'Top_3_Scores': str([round(m['Score'], 2) for m in matches])
+    })
+
+# ==============================================================================
+# 6. EXPORTAÇÃO
+# ==============================================================================
+
+df_resultado = pd.DataFrame(resultados_finais)
+
+# Filtro de qualidade: Opcionalmente marcar o que precisa de revisão humana
+# Se o score for menor que 0.5 (exemplo), pode ser um FPA novo ou confuso
+df_resultado['Revisão_Necessaria'] = np.where(df_resultado['Score_Confianca'] < 0.5, 'SIM', 'NAO')
+
+print("\nVisualização dos Top 5 resultados:")
+print(df_resultado[['FPA_Completo', 'Melhor_Causa_Sugerida', 'Score_Confianca']].head())
+
+# Salvar
+# df_resultado.to_excel("classificacao_fpa_causas.xlsx", index=False)
